@@ -1,10 +1,11 @@
 // Vnosna polja obrazcev in razdelek (kartica). Enaka višina (40 px), obroba in fokus kot filtri.
+// Na telefonu 44 px in pisava 16 px, da iPhone ob vnosu ne poveča strani (opremo se vnaša tudi v skladišču).
 
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 import { FilterNaslov } from "./Filtri";
 
 const POLJE =
-  "h-10 w-full rounded-lg border border-ink-200 bg-white px-3 text-sm text-ink-900 " +
+  "h-11 w-full rounded-lg border border-ink-200 bg-white px-3 text-base text-ink-900 sm:h-10 sm:text-sm " +
   "placeholder:text-ink-400 focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100 " +
   "disabled:cursor-not-allowed disabled:bg-ink-100 disabled:text-ink-500";
 
@@ -42,7 +43,7 @@ export function TextInput({ className = "", ...props }: InputHTMLAttributes<HTML
 }
 
 export function TextArea({ className = "", ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea rows={4} {...props} className={`${POLJE} h-auto min-h-24 py-2 leading-relaxed ${className}`} />;
+  return <textarea rows={4} {...props} className={`${POLJE} h-auto min-h-24 sm:h-auto py-2 leading-relaxed ${className}`} />;
 }
 
 export function Select({

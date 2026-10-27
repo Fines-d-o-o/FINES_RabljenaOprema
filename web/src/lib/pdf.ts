@@ -1,4 +1,4 @@
-// PDF dokumenti opreme (ustvarijo se v brskalniku): kartoteka opreme in tehnični list.
+// PDF dokumenti opreme (ustvarijo se v brskalniku): kartoteka opreme, tehnični list in statusni list.
 // Pisava DejaVu Sans podpira č, š, ž. Podatki se naložijo iz baze ob kliku na prenos.
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
@@ -6,6 +6,25 @@ import { danes, prikazDatuma } from "@/lib/datum";
 import { pripraviSliko } from "@/lib/pripraviSliko";
 import { NAJVISJA_OCENA, opisOcene } from "@/lib/sifranti";
 import { MESTA_SLIK, slikeOpreme, type ObstojecaSlika, type VrstaSlike } from "@/lib/slike";
+import {
+  BARVE as SL_BARVE,
+  KARTICA as SL_KARTICA,
+  MM_V_PT,
+  OZNAKA as SL_OZNAKA,
+  POLJA as SL_POLJA,
+  POSTAVITEV as SL_POSTAVITEV,
+  SIRINA_OPISA as SL_SIRINA_OPISA,
+  STANJA as SL_STANJA,
+  VREDNOST_Y as SL_VREDNOST_Y,
+  potKljukice,
+  potPolnila,
+  potZaobljenega,
+  stolpecStanja,
+  velikeCrke,
+  visinaVrstice,
+  type Okvir,
+  type PodatkiStatusnegaLista,
+} from "@/lib/statusniList";
 import { createClient } from "@/lib/supabase/client";
 import { TL_SKLOPI, type OpremaVrstica, type TehnicniList, type ZapisKartoteke } from "@/lib/types";
 
@@ -401,6 +420,190 @@ export async function ustvariOsnovnePodatkePdf({ oprema, slike }: PodatkiOpreme)
   }
 
   return p.koncaj(`FINES d.o.o. | Rabljena oprema | ID ${oprema.id_oprema}`);
+}
+
+// ---------------------------------------------------------------------------
+// Statusni list (OBR140): postavitev v lib/statusniList.ts, ista kot predogled in tisk
+
+const hex = (h: string) =>
+  rgb(parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255);
+
+// Prelomljeno besedilo, omejeno na število vrstic (zadnja vrstica dobi tropičje, če je besedila več)
+function omejiVrstice(besedilo: string, font: PDFFont, pt: number, sirina: number, vrstic: number) {
+  const vse = prelomi(besedilo, font, pt, sirina).filter((v, i, a) => v || i < a.length - 1);
+  if (vse.length <= vrstic) return vse;
+  const izbrane = vse.slice(0, vrstic);
+  let zadnja = izbrane[vrstic - 1];
+  while (zadnja && font.widthOfTextAtSize(`${zadnja}…`, pt) > sirina) zadnja = zadnja.slice(0, -1);
+  izbrane[vrstic - 1] = `${zadnja.trimEnd()}…`;
+  return izbrane;
+}
+
+export async function ustvariStatusniListPdf(sl: PodatkiStatusnegaLista): Promise<Blob> {
+  const p = await Pisec.ustvari(`Statusni list ${sl.id} – ${sl.naziv}`);
+  const s = p.stran;
+  const k = MM_V_PT;
+  const H = A4[1];
+  const L = SL_POSTAVITEV;
+
+  // Besedilo v vrstici, ki se začne y mm od vrha (navpično na sredini vrstice, kot v HTML)
+  const tekst = (
+    t: string,
+    x: number,
+    y: number,
+    pt: number,
+    o: { font?: PDFFont; barva?: string; sredina?: number; desno?: number } = {},
+  ) => {
+    const font = o.font ?? p.navadna;
+    const w = font.widthOfTextAtSize(t, pt);
+    let xPt = x * k;
+    if (o.sredina) xPt += (o.sredina * k - w) / 2;
+    if (o.desno) xPt += o.desno * k - w;
+    s.drawText(t, {
+      x: xPt,
+      y: H - (y + visinaVrstice(pt) / 2) * k - pt * 0.35,
+      size: pt,
+      font,
+      color: hex(o.barva ?? SL_BARVE.besedilo),
+    });
+  };
+
+  // Zaobljena kartica z rahlo senco
+  const kartica = (
+    o: Okvir,
+    v: { barva?: string; rob?: string | null; debelinaRoba?: number; r?: number; senca?: boolean } = {},
+  ) => {
+    const r = (v.r ?? SL_KARTICA.r) * k;
+    const pot = potZaobljenega(o.w * k, o.h * k, r);
+    if (v.senca ?? true)
+      s.drawSvgPath(pot, {
+        x: o.x * k,
+        y: H - (o.y + SL_KARTICA.sencaY) * k,
+        color: hex(SL_BARVE.senca),
+        opacity: SL_KARTICA.sencaMoc,
+      });
+    // Rob je znotraj okvirja (kot border-box v HTML): zunanja mera kartice je točno o.w × o.h
+    const rob = v.rob === undefined ? SL_BARVE.karticaRob : v.rob;
+    const debelina = rob ? (v.debelinaRoba ?? SL_KARTICA.rob) * k : 0;
+    const d = debelina / 2;
+    s.drawSvgPath(potZaobljenega(o.w * k - debelina, o.h * k - debelina, Math.max(0, r - d)), {
+      x: o.x * k + d,
+      y: H - o.y * k - d,
+      color: hex(v.barva ?? SL_BARVE.kartica),
+      ...(rob ? { borderColor: hex(rob), borderWidth: debelina } : {}),
+    });
+  };
+  const oznaka = (t: string, o: Okvir, barva = SL_BARVE.oznaka, x = SL_OZNAKA.x) =>
+    tekst(velikeCrke(t), o.x + x, o.y + SL_OZNAKA.y, SL_OZNAKA.pt, { font: p.krepka, barva });
+
+  // Glava
+  if (p.logo) s.drawImage(p.logo, { x: L.logo.x * k, y: H - (L.logo.y + L.logo.h) * k, width: L.logo.w * k, height: L.logo.h * k });
+  tekst(L.geslo.besedilo, L.geslo.x, L.geslo.y, L.geslo.pt, { barva: SL_BARVE.oranzna });
+  L.naslov.vrstice.forEach((v, i) =>
+    tekst(v, L.naslov.x, L.naslov.y + i * visinaVrstice(L.naslov.pt), L.naslov.pt, { font: p.krepka, barva: SL_BARVE.glava }),
+  );
+  L.kontakt.vrstice.forEach(([crka, v], i) => {
+    const y = L.kontakt.y + i * visinaVrstice(L.kontakt.pt);
+    tekst(crka, L.kontakt.x, y, L.kontakt.pt, { font: p.krepka, barva: SL_BARVE.oranzna });
+    tekst(v, L.kontakt.x + 5, y, L.kontakt.pt, { font: p.krepka, barva: SL_BARVE.glava });
+  });
+
+  // Rumen pas z naslovom
+  kartica(L.pas, { barva: SL_BARVE.pas, rob: null, r: L.pas.r });
+  tekst(L.pas.besedilo, L.pas.x, L.pas.y + (L.pas.h - visinaVrstice(L.pas.pt)) / 2, L.pas.pt, {
+    font: p.krepka,
+    barva: SL_BARVE.temna,
+    sredina: L.pas.w,
+  });
+
+  // Razdelki: oranžna značka s številko, naslov, tanka črta
+  const R = L.razdelek;
+  for (const raz of L.razdelki) {
+    const znacka = { x: R.x, y: raz.y, w: R.znacka, h: R.znacka };
+    kartica(znacka, { barva: SL_BARVE.oranzna, rob: null, r: 1.5, senca: false });
+    tekst(String(raz.st), R.x, raz.y + (R.znacka - visinaVrstice(R.stPt)) / 2, R.stPt, {
+      font: p.krepka,
+      barva: SL_BARVE.bela,
+      sredina: R.znacka,
+    });
+    const xNaslova = R.x + R.znacka + 2.5;
+    tekst(raz.besedilo, xNaslova, raz.y + (R.znacka - visinaVrstice(R.pt)) / 2, R.pt, { font: p.krepka });
+    const xCrte = xNaslova + p.krepka.widthOfTextAtSize(raz.besedilo, R.pt) / k + 3;
+    s.drawRectangle({
+      x: xCrte * k,
+      y: H - (raz.y + R.znacka / 2 + 0.15) * k,
+      width: (R.do - xCrte) * k,
+      height: 0.3 * k,
+      color: hex(SL_BARVE.karticaRob),
+    });
+  }
+
+  // Prostor za nalepko IDENT (točno 60 × 50 mm); brez nalepke ostaneta naziv in šifra
+  const n = L.nalepka;
+  const nz = n.okvir;
+  const notranja = nz.w - 2 * SL_OZNAKA.x;
+  kartica(nz);
+  tekst(n.naslov, nz.x, nz.y + n.naslovY, n.naslovPt, { font: p.krepka, barva: SL_BARVE.oznaka, sredina: nz.w });
+  for (const [besedilo, y, pt, vrstic] of [
+    [sl.naziv, n.nazivY, n.nazivPt, n.nazivVrstic],
+    [sl.ident, n.sifraY, n.sifraPt, n.sifraVrstic],
+  ] as const)
+    omejiVrstice(besedilo, p.krepka, pt, notranja * k, vrstic).forEach((v, i) =>
+      tekst(v, nz.x + SL_OZNAKA.x, nz.y + y + i * visinaVrstice(pt), pt, { font: p.krepka, sredina: notranja }),
+    );
+
+  // Polja: oznaka zgoraj, vrednost krepko
+  for (const { oznaka: t, kljuc, okvir: o, pt, vrstic } of SL_POLJA) {
+    kartica(o);
+    oznaka(t, o);
+    omejiVrstice(String(sl[kljuc] ?? ""), p.krepka, pt, (o.w - 2 * SL_OZNAKA.x) * k, vrstic).forEach((v, i) =>
+      tekst(v, o.x + SL_OZNAKA.x, o.y + SL_VREDNOST_Y + i * visinaVrstice(pt), pt, { font: p.krepka }),
+    );
+  }
+
+  // Stanje blaga: kartica izbrane ocene je zelena s kljukico, krog se polni od spodaj
+  SL_STANJA.forEach((st, i) => {
+    const c = stolpecStanja(i);
+    const izbrana = sl.ocena === st.ocena;
+    kartica(c.kartica, {
+      barva: izbrana ? SL_BARVE.izbranaOzadje : SL_BARVE.kartica,
+      rob: izbrana ? SL_BARVE.izbranaRob : SL_BARVE.karticaRob,
+      debelinaRoba: izbrana ? 0.6 : SL_KARTICA.rob,
+    });
+    const sredisce = { x: c.krog.cx * k, y: H - c.krog.cy * k };
+    s.drawCircle({ ...sredisce, size: c.krog.r * k, color: hex(SL_BARVE.krog) });
+    if (st.polnilo >= 1) s.drawCircle({ ...sredisce, size: c.krog.r * k, color: hex(SL_BARVE.polnilo) });
+    else s.drawSvgPath(potPolnila(c.krog.r * k, st.polnilo), { ...sredisce, color: hex(SL_BARVE.polnilo) });
+    s.drawCircle({ ...sredisce, size: c.krog.r * k, borderColor: hex(SL_BARVE.krogRob), borderWidth: 0.4 * k });
+    if (izbrana) {
+      const kl = { x: c.kljukica.cx * k, y: H - c.kljukica.cy * k };
+      s.drawCircle({ ...kl, size: c.kljukica.r * k, color: hex(SL_BARVE.izbranaRob) });
+      s.drawSvgPath(potKljukice(c.kljukica.r * k), { ...kl, borderColor: hex(SL_BARVE.bela), borderWidth: 0.5 * k });
+    }
+    const x = c.besediloX - SL_SIRINA_OPISA / 2;
+    tekst(String(st.ocena), x, c.stevilkaY, L.stanje.stevilkaPt, {
+      font: p.krepka,
+      barva: izbrana ? SL_BARVE.izbranaRob : SL_BARVE.besedilo,
+      sredina: SL_SIRINA_OPISA,
+    });
+    st.opis.forEach((v, j) => tekst(v, x, c.opisY[j], L.stanje.opisPt, { sredina: SL_SIRINA_OPISA }));
+  });
+
+  // ID opreme v temni kartici
+  kartica(L.id, { barva: SL_BARVE.temna, rob: null, r: L.id.r });
+  oznaka(L.id.oznaka, L.id, SL_BARVE.oranznaSvetla, 4);
+  tekst(String(sl.id), L.id.x + 4, L.id.y + SL_VREDNOST_Y - 0.5, L.id.pt, { font: p.krepka, barva: SL_BARVE.bela });
+
+  // Noga
+  s.drawRectangle({ x: R.x * k, y: H - (L.noga.crtaY + 0.25) * k, width: (R.do - R.x) * k, height: 0.25 * k, color: hex(SL_BARVE.karticaRob) });
+  tekst(L.noga.levo, R.x, L.noga.y, L.noga.pt, { barva: SL_BARVE.oznaka });
+  tekst(L.noga.desno, R.do - 30, L.noga.y, L.noga.pt, { barva: SL_BARVE.oznaka, desno: 30 });
+
+  return new Blob([(await p.pdf.save()) as BlobPart], { type: "application/pdf" });
+}
+
+export async function prenesiStatusniList(sl: PodatkiStatusnegaLista) {
+  prenesiDatoteko(await ustvariStatusniListPdf(sl), asciiIme(`Statusni_list_${sl.id}_${sl.naziv}`) + ".pdf");
 }
 
 // ---------------------------------------------------------------------------

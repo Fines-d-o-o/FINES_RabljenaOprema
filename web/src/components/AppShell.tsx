@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Glava } from "@/components/Glava";
 import { createClient } from "@/lib/supabase/server";
 import { TRENUTNA_VERZIJA } from "@/lib/verzije";
-import { jeSamoOgled } from "@/lib/vloga";
+import { prijavljeni } from "@/lib/vloga";
 
 // Okvir vsake strani: glava (logo, Nazaj, i, Izhod), naslov in podnaslov levo, akcije desno zgoraj.
 export async function AppShell({
@@ -20,14 +20,15 @@ export async function AppShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const samoOgled = await jeSamoOgled(await createClient());
+  const { email, samoOgled } = await prijavljeni(await createClient());
   return (
-    <div className="flex min-h-dvh flex-col">
-      <Glava back={back} backHint={backHint} samoOgled={samoOgled} />
+    // overflow-x-clip: stran nikoli ni širša od zaslona (lepljiva glava še deluje)
+    <div className="flex min-h-dvh flex-col overflow-x-clip">
+      <Glava back={back} backHint={backHint} samoOgled={samoOgled} email={email} />
 
       <main className="mx-auto w-full max-w-[1800px] flex-1 px-3 py-4 sm:px-6 sm:py-6">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
+          <div className="min-w-[min(100%,18rem)] flex-1">
             <h1 className="break-words text-xl font-bold text-ink-900">{title}</h1>
             {subtitle && <p className="text-sm text-ink-500">{subtitle}</p>}
           </div>

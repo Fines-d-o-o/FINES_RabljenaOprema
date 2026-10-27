@@ -16,6 +16,12 @@ Skupna pravila so v `../FINES_Standardi/app_instructions.md` (uvoženo v `CLAUDE
 ## Statusi prodaje (barve značk in kartic)
 - Ni za prodajo rdeča, Ni urejeno za prodajo rumena, Neprodano oranžna, Prodano siva, Posojeno modra.
 
+## Statusni list (OBR140 - Status blaga - Rabljeno)
+- Nalepka na rabljeni opremi ob pakiranju v folijo; vzorec je `data/statusni_list.pdf`.
+- Gumb "Statusni list" (bel) na strani opreme ob Tehničnem listu odpre predogled s "Prenesi PDF" in "Natisni" (oba oranžna; tisk odpre sistemsko okno za izbiro tiskalnika).
+- Siva kartica "NALEPKA · IDENT" je prostor za nalepko in mora biti **točno 60 × 50 mm** (zunanja mera z robom). V njej sta naziv in šifra (vidna, če se nalepka ne prelepi). Tiska se v velikosti 100 %.
+- Postavitev (mere v mm) je ena za predogled / tisk in PDF: `web/src/lib/statusniList.ts`. Pri tisku je viden samo element `.fp-tisk` (`globals.css`).
+
 ## AI iskanje (poskusno)
 - Element na domači strani, odprtokodni model v brskalniku (brezplačno, brez API ključa). Vse je v `web/src/components/ai-iskanje/`, navodila za odstranitev so v tamkajšnjem `README.md`.
 - Sken serijske nalepke pri dodajanju opreme (OCR v brskalniku): `web/src/components/sken-nalepke/`, odstranitev v tamkajšnjem `README.md`.

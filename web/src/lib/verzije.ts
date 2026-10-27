@@ -2,6 +2,32 @@
 // Manjši popravki: 1.01 -> 1.02; nova funkcija ali podstran: 1.xx -> 2.01.
 export const VERZIJE: { verzija: string; datum: string; spremembe: string[] }[] = [
   {
+    verzija: "6.03",
+    datum: "2026-10-27",
+    spremembe: [
+      "Statusni list: siva kartica »NALEPKA · IDENT« je prostor za nalepko in je točno 60 × 50 mm (pri tisku izberi velikost 100 % / dejanska velikost). V njej sta naziv in šifra, ki se vidita, če se nalepka ne prelepi.",
+      "Spodnji razdelki so pomaknjeni višje, podroben opis stanja ima prostor za do 5 vrstic.",
+    ],
+  },
+  {
+    verzija: "6.02",
+    datum: "2026-10-27",
+    spremembe: [
+      "Statusni list v modernem videzu (enaka razporeditev kot obrazec): zaobljene senčene kartice z oznako v kartici, izpolnjeni podatki večji in krepki.",
+      "Razdelki z oranžno oštevilčeno značko, ident v belem okvirju, izbrana ocena stanja v zeleni kartici s kljukico, ID opreme v temnem okvirju.",
+    ],
+  },
+  {
+    verzija: "6.01",
+    datum: "2026-10-27",
+    spremembe: [
+      "Stran opreme: gumb »Statusni list« ob Tehničnem listu. Odpre predogled obrazca OBR140 »Status blaga - Rabljeno« (nalepka na opremi ob pakiranju v folijo), izpolnjenega s podatki opreme.",
+      "Statusni list: naziv in ident, serijska številka, lastnik, opis (skupina opreme, leto proizvodnje), skladišče ERP / fizična lokacija, obkrožena ocena stanja, podroben opis stanja (komentar), ID in datum tiska; podpis se vpiše ročno.",
+      "V predogledu gumba »Prenesi PDF« in »Natisni« (odpre sistemsko okno za tisk z izbiro tiskalnika; natisne se samo list A4).",
+      "Usklajeno s standardnimi komponentami: okno je na telefonu čez cel zaslon z gumbi v nogi, glava gre v 360 px (manjši logo, okrogel Izhod), prijavljeni uporabnik levo od Izhoda, vnosna polja na telefonu 44 px in pisava 16 px.",
+    ],
+  },
+  {
     verzija: "5.01",
     datum: "2026-10-10",
     spremembe: [

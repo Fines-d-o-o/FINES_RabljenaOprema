@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { ClipboardList } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { SlikeUrejevalnik } from "@/components/SlikeUrejevalnik";
+import { StatusniListGumb } from "@/components/StatusniList";
 import { NavPovezava, StatusBadge, SuccessText, WarningText, buttonClass } from "@/components/ui";
 import { OpremaObrazec } from "@/app/oprema/OpremaObrazec";
 import { naloziSifrante } from "@/lib/sifranti";
@@ -51,6 +52,7 @@ export default async function UrediPage({ params, searchParams }: PageProps<"/op
             <ClipboardList className="h-4 w-4 shrink-0" aria-hidden />
             Tehnični list
           </NavPovezava>
+          <StatusniListGumb oprema={oprema} />
           <IzbrisiGumb idOprema={oprema.id_oprema} naziv={oprema.oprema_naziv} samoOgled={samoOgled} />
         </div>
       }

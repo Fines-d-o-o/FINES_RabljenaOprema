@@ -11,6 +11,7 @@
   --color-fines-50: #fdf3ed;
   --color-fines-100: #fae2d3;
   --color-fines-200: #f3bf9f;
+  --color-fines-400: #ee7a3a; /* oranžno besedilo na temnem ozadju */
   --color-fines-500: #ca5010;
   --color-fines-600: #b0450d;
   --color-fines-700: #8f380b;
@@ -55,4 +56,28 @@ body {
   border: 1px solid var(--color-ink-200);
   border-radius: 0.75rem;
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+/* Tisk dokumenta (npr. statusni list): natisne se samo element .fp-tisk (izrisan v <body>),
+   stran A4 brez robov brskalnika (brez URL in datuma v glavi / nogi). */
+.fp-tisk {
+  display: none;
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  html,
+  body {
+    background: #fff;
+  }
+  body > :not(.fp-tisk) {
+    display: none !important;
+  }
+  .fp-tisk {
+    display: block;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
 }
