@@ -1,4 +1,4 @@
--- Uporabnik "samo ogled" (npr. finesview@fines.si): bere vse, ne more dodajati, urejati ali brisati.
+-- Uporabnik "samo ogled" (npr. uporabnik za pregled): bere vse, ne more dodajati, urejati ali brisati.
 -- Vloga je v app_metadata uporabnika (uporabnik je sam ne more spremeniti): {"vloga": "ogled"}.
 
 -- 1) Ali sme trenutni uporabnik spreminjati podatke
@@ -47,8 +47,8 @@ create policy "rbo slike uredi" on storage.objects for update to authenticated
 create policy "rbo slike izbrisi" on storage.objects for delete to authenticated
     using (bucket_id = 'Slike_rabljena_oprema' and public.rbo_lahko_ureja());
 
--- 4) Uporabniku FINESVIEW dodeli vlogo "ogled".
---    Uporabnika najprej ustvari v Authentication -> Users (finesview@fines.si), nato poženi to vrstico.
+-- 4) Uporabniku za pregled dodeli vlogo "ogled".
+--    Uporabnika najprej ustvari v Authentication -> Users, nato v spodnji vrstici vpiši njegov e-mail in jo poženi.
 update auth.users
 set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"vloga": "ogled"}'::jsonb
-where email = 'finesview@fines.si';
+where email = '<e-mail uporabnika>';

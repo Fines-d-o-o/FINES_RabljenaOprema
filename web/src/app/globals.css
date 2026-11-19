@@ -81,3 +81,10 @@ body {
     -webkit-print-color-adjust: exact;
   }
 }
+
+/* Starejši brskalniki brez overflow-x: clip - stran vseeno ne sme biti širša od zaslona */
+@supports not (overflow-x: clip) {
+  .overflow-x-clip {
+    overflow-x: hidden;
+  }
+}

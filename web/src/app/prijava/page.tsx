@@ -3,12 +3,12 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { LogIn } from "lucide-react";
-import { Button, ErrorText, Field, TextInput } from "@/components/ui";
+import { Eye, EyeOff, LogIn } from "lucide-react";
+import { Button, ErrorText, Field, IconButton, TextInput } from "@/components/ui";
 import { DOVOLJENA_DOMENA } from "@/lib/config";
 import { createClient } from "@/lib/supabase/client";
 
-// Uporabniško ime brez @ se pretvori v e-mail (FINES -> fines@fines.si); Supabase za prijavo z geslom zahteva e-mail.
+// Uporabniško ime brez @ se pretvori v e-mail (ime -> ime@domena); Supabase za prijavo z geslom zahteva e-mail.
 const vEmail = (uporabnik: string) => {
   const u = uporabnik.trim().toLowerCase();
   return u.includes("@") ? u : `${u}@${DOVOLJENA_DOMENA}`;
@@ -18,6 +18,7 @@ export default function PrijavaPage() {
   const router = useRouter();
   const [uporabnik, setUporabnik] = useState("");
   const [geslo, setGeslo] = useState("");
+  const [pokaziGeslo, setPokaziGeslo] = useState(false);
   const [napaka, setNapaka] = useState<string | null>(null);
   const [nalaganje, setNalaganje] = useState(false);
 
@@ -54,13 +55,21 @@ export default function PrijavaPage() {
             />
           </Field>
           <Field label="Geslo">
-            <TextInput
-              type="password"
-              autoComplete="current-password"
-              required
-              value={geslo}
-              onChange={(e) => setGeslo(e.target.value)}
-            />
+            <div className="flex gap-2">
+              <TextInput
+                type={pokaziGeslo ? "text" : "password"}
+                autoComplete="current-password"
+                required
+                value={geslo}
+                onChange={(e) => setGeslo(e.target.value)}
+              />
+              <IconButton
+                variant="neutral"
+                icon={pokaziGeslo ? EyeOff : Eye}
+                hint={pokaziGeslo ? "Skrij vpisano geslo" : "Pokaži vpisano geslo"}
+                onClick={() => setPokaziGeslo((v) => !v)}
+              />
+            </div>
           </Field>
           <Button type="submit" size="lg" icon={LogIn} disabled={nalaganje} hint="Prijava v aplikacijo Rabljena oprema">
             {nalaganje ? "Prijavljam ..." : "Prijava"}

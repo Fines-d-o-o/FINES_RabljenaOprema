@@ -2,6 +2,25 @@
 // Manjši popravki: 1.01 -> 1.02; nova funkcija ali podstran: 1.xx -> 2.01.
 export const VERZIJE: { verzija: string; datum: string; spremembe: string[] }[] = [
   {
+    verzija: "7.02",
+    datum: "2026-11-19",
+    spremembe: [
+      "Obvestilo v Teams kanal, ko je oprema označena kot »3. PRODANO«: »Oprema je bila označena kot PRODANA«, poziv »Peč odpišite na odpremni nalog« in osnovni podatki (naziv, ID, ident, serijska številka, skupina, skladišče, kupec, datum prodaje, prodajalec), kdo je označil prodajo in gumb »Odpri opremo«.",
+      "Obvestilo se pošlje samo enkrat - ob spremembi statusa v PRODANO (ponovno shranjevanje ga ne pošlje). Če pošiljanje ne uspe, je oprema vseeno shranjena, aplikacija pa opozori, naj se ekipo obvesti ročno.",
+    ],
+  },
+  {
+    verzija: "7.01",
+    datum: "2026-11-19",
+    spremembe: [
+      "Dnevnik sprememb: vsaka sprememba opreme se samodejno zapiše v kartoteko kot »Avtomatski vnos« z datumom, uro in uporabnikom: kateri podatek se je spremenil iz česa v kaj (osnovni podatki, stanje in lokacija, prodaja, tehnični list).",
+      "Zabeležijo se tudi dodane, zamenjane in odstranjene slike, izbrisani ročni zapisi kartoteke in izbris opreme. Prvi zapis: »Oprema je bila dodana v sistem na dan …«.",
+      "Avtomatskih vnosov ni mogoče izbrisati ali urejati; v kartoteki jih lahko skriješ s kljukico »Avtomatski vnosi«. Ročni zapisi ostanejo enaki kot prej.",
+      "Prodaja: novo polje »Kupec« ob datumu prodaje. Ko se status nastavi na »3. PRODANO«, sta kupec in datum prodaje obvezna (oprema, ki je bila prodana že prej, ju lahko ima prazna).",
+      "Usklajeno s standardi: iskanje po nazivu in serijski številki najde besede v poljubnem vrstnem redu in brez šumnikov (»pec« najde »Peč«), iskalno polje ima gumb × za brisanje, prijava ima gumb pokaži / skrij geslo, cene in rabat se v poljih prikažejo z decimalno vejico, statusni list na telefonu pokaže samo »Prenesi PDF«.",
+    ],
+  },
+  {
     verzija: "6.03",
     datum: "2026-10-27",
     spremembe: [

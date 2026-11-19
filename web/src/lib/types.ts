@@ -22,6 +22,7 @@ export type OpremaVrstica = {
   prodajna_cena: number | null;
   datum_prodaje: string | null;
   komentar_ob_prodaji: string | null;
+  kupec: string | null;
   status_prodaje: string | null;
   ima_tehnicni_list?: boolean;
   ima_kartoteko?: boolean;
@@ -35,6 +36,16 @@ export type ZapisKartoteke = {
   datum_vnosa: string; // LLLL-MM-DD
   besedilo_vnosa: string;
   strosek?: number | null; // EUR
+};
+
+// Avtomatski vnos v kartoteki (rbo_dnevnik; zapiše ga trigger v bazi ob vsaki spremembi)
+export type ZapisDnevnika = {
+  id: number;
+  cas: string; // timestamptz
+  uporabnik: string | null;
+  sklop: string; // Oprema, Prodaja, Slike, Tehnični list, Kartoteka
+  besedilo: string;
+  spremembe: { oznaka: string; staro: string | null; novo: string | null }[] | null;
 };
 
 // rbo_tehnicni_list (brez id in id_oprema)

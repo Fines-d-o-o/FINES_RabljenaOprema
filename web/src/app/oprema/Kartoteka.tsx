@@ -1,22 +1,33 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { History, Plus, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, Bot, History, Plus, Trash2 } from "lucide-react";
 import { PdfGumb } from "@/components/PdfGumb";
-import { Button, ErrorText, Field, FilterPolje, IconButton, Section, TextArea, TextInput } from "@/components/ui";
+import { Button, ErrorText, Field, FilterCheckbox, FilterPolje, IconButton, Section, TextArea, TextInput } from "@/components/ui";
 import { danes, prikazDatuma } from "@/lib/datum";
-import type { ZapisKartoteke } from "@/lib/types";
+import type { ZapisDnevnika, ZapisKartoteke } from "@/lib/types";
 import { NAMIG_SAMO_OGLED } from "@/lib/vloga";
 import { dodajZapisKartoteke, izbrisiKartoteko, izbrisiZapisKartoteke } from "./actions";
 
 const evri = (n: number) => n.toLocaleString("sl-SI", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 
-// Najnovejši zgoraj; pri enakem datumu kasneje dodan zgoraj
-const urejeno = (zapisi: ZapisKartoteke[]) =>
-  zapisi
-    .map((z, i) => ({ z, i }))
-    .sort((a, b) => b.z.datum_vnosa.localeCompare(a.z.datum_vnosa) || (b.z.id ?? b.i) - (a.z.id ?? a.i))
-    .map(({ z }) => z);
+// Časovni pas podjetja (enak prikaz na strežniku in v brskalniku)
+const CAS_PAS = "Europe/Ljubljana";
+const danCasa = (cas: string) => new Date(cas).toLocaleDateString("sv-SE", { timeZone: CAS_PAS });
+const uraCasa = (cas: string) =>
+  new Date(cas).toLocaleTimeString("sl-SI", { timeZone: CAS_PAS, hour: "2-digit", minute: "2-digit" });
+
+type Vnos = { rocni: ZapisKartoteke; i: number } | { avto: ZapisDnevnika };
+
+// Najnovejši zgoraj. Isti dan: ročni zapisi nad avtomatskimi, kasneje dodan zgoraj.
+function urejeno(zapisi: ZapisKartoteke[], dnevnik: ZapisDnevnika[]): Vnos[] {
+  const dan = (v: Vnos) => ("rocni" in v ? v.rocni.datum_vnosa : danCasa(v.avto.cas));
+  const vrstni = (v: Vnos) => ("rocni" in v ? 1e15 + (v.rocni.id ?? 1e12 + v.i) : new Date(v.avto.cas).getTime());
+  return [...zapisi.map((rocni, i) => ({ rocni, i })), ...dnevnik.map((avto) => ({ avto }))].sort(
+    (a, b) => dan(b).localeCompare(dan(a)) || vrstni(b) - vrstni(a),
+  );
+}
 
 /**
  * Kartoteka opreme.
@@ -26,10 +37,12 @@ const urejeno = (zapisi: ZapisKartoteke[]) =>
 export function Kartoteka({
   idOprema,
   zacetniZapisi = [],
+  dnevnik = [],
   samoOgled = false,
 }: {
   idOprema?: number;
   zacetniZapisi?: ZapisKartoteke[];
+  dnevnik?: ZapisDnevnika[]; // avtomatski vnosi (iz baze, ob vsaki spremembi opreme)
   samoOgled?: boolean; // brez pravic urejanja: samo pregled in PDF
 }) {
   const [zapisi, setZapisi] = useState(zacetniZapisi);
@@ -38,6 +51,8 @@ export function Kartoteka({
   const [strosek, setStrosek] = useState("");
   const [napaka, setNapaka] = useState<string | null>(null);
   const [shranjujem, startShranjevanje] = useTransition();
+  const [prikaziAvto, setPrikaziAvto] = useState(true);
+  const router = useRouter();
   const lokalno = idOprema === undefined;
 
   function dodaj() {
@@ -77,11 +92,12 @@ export function Kartoteka({
       const r = await izbrisiZapisKartoteke(id);
       if (r.napaka) return setNapaka(r.napaka);
       setZapisi((vsi) => vsi.filter((x) => x.id !== id));
+      router.refresh(); // izbris se zabeleži kot avtomatski vnos
     });
   }
 
   function izbrisiVse() {
-    if (!confirm(`Izbrišem celotno kartoteko opreme (${zapisi.length} zapisov)?`)) return;
+    if (!confirm(`Izbrišem vse ročne zapise kartoteke (${zapisi.length})?\n\nAvtomatski vnosi ostanejo.`)) return;
     setNapaka(null);
     if (idOprema === undefined) {
       setZapisi([]);
@@ -94,7 +110,7 @@ export function Kartoteka({
     });
   }
 
-  const prikaz = urejeno(zapisi);
+  const prikaz = urejeno(zapisi, prikaziAvto ? dnevnik : []);
   const skupaj = zapisi.reduce((v, z) => v + (z.strosek ?? 0), 0);
 
   return (
@@ -117,7 +133,7 @@ export function Kartoteka({
             icon={Trash2}
             onClick={izbrisiVse}
             disabled={shranjujem || zapisi.length === 0 || samoOgled}
-            hint={samoOgled ? NAMIG_SAMO_OGLED : "Izbriši celotno kartoteko opreme (vse zapise)"}
+            hint={samoOgled ? NAMIG_SAMO_OGLED : "Izbriši vse ročne zapise kartoteke opreme"}
           >
             Izbriši
           </Button>
@@ -172,10 +188,24 @@ export function Kartoteka({
       </fieldset>
 
       <div className="mt-5 border-t border-ink-200 pt-4">
-        {skupaj > 0 && (
-          <p className="mb-3 text-sm text-ink-500">
-            Skupni stroški: <strong className="tabular-nums text-ink-900">{evri(skupaj)}</strong>
-          </p>
+        {(skupaj > 0 || dnevnik.length > 0) && (
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+            <p className="text-sm text-ink-500">
+              {skupaj > 0 && (
+                <>
+                  Skupni stroški: <strong className="tabular-nums text-ink-900">{evri(skupaj)}</strong>
+                </>
+              )}
+            </p>
+            {dnevnik.length > 0 && (
+              <FilterCheckbox
+                label={`Avtomatski vnosi (${dnevnik.length})`}
+                checked={prikaziAvto}
+                onChange={setPrikaziAvto}
+                hint="Pokaži ali skrij samodejno zabeležene spremembe"
+              />
+            )}
+          </div>
         )}
         {prikaz.length === 0 ? (
           <p className="flex items-center justify-center gap-2 py-6 text-sm text-ink-500">
@@ -183,39 +213,119 @@ export function Kartoteka({
           </p>
         ) : (
           <ol className="max-h-[28rem] overflow-y-auto pr-2">
-            {prikaz.map((z, i) => (
-              <li key={z.id ?? `lokalno-${i}`} className="relative flex gap-4 pb-5 last:pb-1">
-                {/* časovnica: pika + navpična črta */}
+            {prikaz.map((v, i) => (
+              <li
+                key={"rocni" in v ? (v.rocni.id ?? `lokalno-${v.i}`) : `avto-${v.avto.id}`}
+                className="relative flex gap-4 pb-5 last:pb-1"
+              >
+                {/* časovnica: pika (ročni oranžna, avtomatski siva) + navpična črta */}
                 <div className="relative flex w-3 shrink-0 justify-center">
-                  <span className="z-10 mt-1.5 h-3 w-3 rounded-full border-2 border-white bg-fines-500 ring-2 ring-fines-200" />
+                  <span
+                    className={`z-10 mt-1.5 h-3 w-3 rounded-full border-2 border-white ring-2 ${
+                      "rocni" in v ? "bg-fines-500 ring-fines-200" : "bg-ink-400 ring-ink-200"
+                    }`}
+                  />
                   {i < prikaz.length - 1 && <span className="absolute bottom-[-0.25rem] top-4 w-0.5 bg-ink-200" />}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-bold text-ink-900">
-                    {prikazDatuma(z.datum_vnosa)}
-                    {z.strosek != null && (
-                      <span className="rounded bg-fines-50 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-fines-700">
-                        Strošek: {evri(z.strosek)}
-                      </span>
-                    )}
-                    {!z.id && (
-                      <span className="rounded bg-warn-50 px-1.5 py-0.5 text-xs font-semibold text-warn-700">ni še shranjeno</span>
-                    )}
-                  </p>
-                  <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink-900">{z.besedilo_vnosa}</p>
-                </div>
-                <IconButton
-                  variant="danger"
-                  icon={Trash2}
-                  onClick={() => izbrisiZapis(z)}
-                  disabled={shranjujem || samoOgled}
-                  hint={samoOgled ? NAMIG_SAMO_OGLED : `Izbriši zapis z dne ${prikazDatuma(z.datum_vnosa)}`}
-                />
+                {"rocni" in v ? (
+                  <RocniVnos
+                    z={v.rocni}
+                    onIzbrisi={() => izbrisiZapis(v.rocni)}
+                    onemogoceno={shranjujem || samoOgled}
+                    samoOgled={samoOgled}
+                  />
+                ) : (
+                  <AvtomatskiVnos d={v.avto} />
+                )}
               </li>
             ))}
           </ol>
         )}
       </div>
     </Section>
+  );
+}
+
+function RocniVnos({
+  z,
+  onIzbrisi,
+  onemogoceno,
+  samoOgled,
+}: {
+  z: ZapisKartoteke;
+  onIzbrisi: () => void;
+  onemogoceno: boolean;
+  samoOgled: boolean;
+}) {
+  return (
+    <>
+      <div className="min-w-0 flex-1">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-bold text-ink-900">
+          {prikazDatuma(z.datum_vnosa)}
+          {z.strosek != null && (
+            <span
+              className="rounded bg-fines-50 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-fines-700"
+              title="Strošek, povezan s tem zapisom"
+            >
+              Strošek: {evri(z.strosek)}
+            </span>
+          )}
+          {!z.id && (
+            <span
+              className="rounded bg-warn-50 px-1.5 py-0.5 text-xs font-semibold text-warn-700"
+              title="Zapis se shrani skupaj z novo opremo"
+            >
+              ni še shranjeno
+            </span>
+          )}
+        </p>
+        <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink-900">{z.besedilo_vnosa}</p>
+      </div>
+      <IconButton
+        variant="danger"
+        icon={Trash2}
+        onClick={onIzbrisi}
+        disabled={onemogoceno}
+        hint={samoOgled ? NAMIG_SAMO_OGLED : `Izbriši zapis z dne ${prikazDatuma(z.datum_vnosa)}`}
+      />
+    </>
+  );
+}
+
+// Avtomatski vnos: zapiše ga baza ob spremembi, zato ga ni mogoče izbrisati
+function AvtomatskiVnos({ d }: { d: ZapisDnevnika }) {
+  return (
+    <div className="min-w-0 flex-1">
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-bold text-ink-700">
+        <span className="tabular-nums">
+          {prikazDatuma(danCasa(d.cas))} <span className="font-normal text-ink-500">ob {uraCasa(d.cas)}</span>
+        </span>
+        <span
+          className="inline-flex items-center gap-1 rounded bg-ink-100 px-1.5 py-0.5 text-xs font-semibold text-ink-600"
+          title="Samodejno zabeležena sprememba, ni je mogoče izbrisati"
+        >
+          <Bot size={12} aria-hidden /> Avtomatski vnos · {d.sklop}
+        </span>
+        {d.uporabnik && (
+          <span className="truncate text-xs font-normal text-ink-500" title="Kdo je naredil spremembo">
+            {d.uporabnik}
+          </span>
+        )}
+      </p>
+      {d.spremembe && d.spremembe.length > 0 ? (
+        <ul className="mt-1 flex flex-col gap-0.5 text-sm text-ink-700">
+          {d.spremembe.map((s, i) => (
+            <li key={i} className="break-words [overflow-wrap:anywhere]">
+              <span className="font-semibold text-ink-900">{s.oznaka}:</span>{" "}
+              <span className={s.staro ? "text-ink-500 line-through" : "italic text-ink-400"}>{s.staro ?? "prazno"}</span>
+              <ArrowRight size={14} className="mx-1 inline-block align-[-2px] text-ink-400" aria-hidden />
+              <span className={s.novo ? "font-semibold text-ink-900" : "italic text-ink-400"}>{s.novo ?? "prazno"}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink-700">{d.besedilo}</p>
+      )}
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import type { HTMLAttributes, ReactNode } from "react";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 
 /**
  * Standardna vrstica filtrov: vsi gumbi / polja so poravnani spodaj (enaka višina 40 px),
@@ -56,10 +56,25 @@ export function FilterIskanje({
           title={hint}
           aria-label={label}
           inputMode={inputMode}
+          enterKeyHint="search"
+          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
           // upravitelji gesel (npr. Proton Pass) dodajo poljem svoje atribute
           suppressHydrationWarning
-          className="h-10 w-full rounded-lg border border-ink-200 bg-white pl-8 pr-2 text-sm focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100"
+          className="h-10 w-full rounded-lg border border-ink-200 bg-white pl-8 pr-9 text-sm focus:border-fines-500 focus:outline-none focus:ring-2 focus:ring-fines-100 [&::-webkit-search-cancel-button]:hidden"
         />
+        {value && (
+          <button
+            type="button"
+            // ne vzame fokusa, da tipkovnica na telefonu ostane odprta
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onChange("")}
+            title="Počisti iskalno polje"
+            aria-label="Počisti iskalno polje"
+            className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-md text-ink-400 hover:bg-ink-100 hover:text-ink-700"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        )}
       </span>
     </FilterPolje>
   );

@@ -430,7 +430,7 @@ export function StatusniListGumb({ oprema }: { oprema: OpremaVrstica }) {
         open={odprt && !!p}
         title="Statusni list"
         onClose={() => setOdprt(false)}
-        sirina="max-w-3xl"
+        sirina="max-w-5xl"
         noga={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button
@@ -443,7 +443,13 @@ export function StatusniListGumb({ oprema }: { oprema: OpremaVrstica }) {
             >
               Prenesi PDF
             </Button>
-            <Button variant="primary" icon={Printer} hint="Natisni statusni list na izbran tiskalnik" onClick={() => window.print()}>
+            <Button
+              variant="primary"
+              icon={Printer}
+              className="hidden sm:inline-flex"
+              hint="Natisni statusni list na izbran tiskalnik"
+              onClick={() => window.print()}
+            >
               Natisni
             </Button>
           </div>

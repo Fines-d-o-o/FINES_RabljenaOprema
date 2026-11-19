@@ -14,11 +14,12 @@ import {
   TextArea,
   TextInput,
   useSpremembeObrazca,
+  WarningText,
 } from "@/components/ui";
-import { ENOTE_MERE, GARANCIJE, STATUSI, type Sifranti } from "@/lib/sifranti";
+import { ENOTE_MERE, GARANCIJE, STATUSI, STATUS_PRODANO, obveznoObProdaji, type Sifranti } from "@/lib/sifranti";
 import { danes } from "@/lib/datum";
 import { NAMIG_SAMO_OGLED } from "@/lib/vloga";
-import type { OpremaVrstica, ZapisKartoteke } from "@/lib/types";
+import type { OpremaVrstica, ZapisDnevnika, ZapisKartoteke } from "@/lib/types";
 import { shraniOpremo, type ShraniStanje } from "./actions";
 import { Kartoteka } from "./Kartoteka";
 import { SkenNalepke } from "@/components/sken-nalepke/SkenNalepke";
@@ -26,24 +27,29 @@ import { SkenNalepke } from "@/components/sken-nalepke/SkenNalepke";
 const GARANCIJE_MOZNOSTI = GARANCIJE.map((m) => ({ value: m as number, label: `${m} mes.`, hint: `Garancija ${m} mesecev` }));
 
 const niz = (v: string | number | null | undefined) => (v === null || v === undefined ? "" : String(v));
+// Število za vnosno polje: decimalna vejica, brez ločila tisočic (npr. 4,5)
+const formatVnos = (v: number | null | undefined) => (v === null || v === undefined ? "" : String(v).replace(".", ","));
 
 export function OpremaObrazec({
   oprema,
   sifranti,
   kartoteka,
+  dnevnik,
   samoOgled = false,
 }: {
   oprema?: OpremaVrstica;
   sifranti: Sifranti;
   kartoteka?: ZapisKartoteke[];
+  dnevnik?: ZapisDnevnika[]; // avtomatski vnosi (samo obstoječa oprema)
   samoOgled?: boolean; // uporabnik brez pravic urejanja: vsa polja in gumbi za urejanje so onemogočeni
 }) {
   const novo = !oprema;
   const [, startTransition] = useTransition();
   const [ocena, setOcena] = useState<number | null>(oprema?.ocena ?? null);
-  const [cenaNove, setCenaNove] = useState(niz(oprema?.cena_nove));
-  const [rabat, setRabat] = useState(niz(oprema?.rabat_procent));
-  const [prodajnaCena, setProdajnaCena] = useState(niz(oprema?.prodajna_cena));
+  const [status, setStatus] = useState<string | null>(oprema?.status_prodaje ?? null);
+  const [cenaNove, setCenaNove] = useState(formatVnos(oprema?.cena_nove));
+  const [rabat, setRabat] = useState(formatVnos(oprema?.rabat_procent));
+  const [prodajnaCena, setProdajnaCena] = useState(formatVnos(oprema?.prodajna_cena));
   const zacetnaGarancija = oprema?.garancijski_rok_meseci ?? 0;
   const [imaGarancijo, setImaGarancijo] = useState(zacetnaGarancija > 0);
   const [garancija, setGarancija] = useState<number | null>(zacetnaGarancija > 0 ? zacetnaGarancija : null);
@@ -60,9 +66,10 @@ export function OpremaObrazec({
   function ponastavi() {
     obrazec.current?.reset();
     setOcena(oprema?.ocena ?? null);
-    setCenaNove(niz(oprema?.cena_nove));
-    setRabat(niz(oprema?.rabat_procent));
-    setProdajnaCena(niz(oprema?.prodajna_cena));
+    setStatus(oprema?.status_prodaje ?? null);
+    setCenaNove(formatVnos(oprema?.cena_nove));
+    setRabat(formatVnos(oprema?.rabat_procent));
+    setProdajnaCena(formatVnos(oprema?.prodajna_cena));
     setImaGarancijo(zacetnaGarancija > 0);
     setGarancija(zacetnaGarancija > 0 ? zacetnaGarancija : null);
     requestAnimationFrame(spremembe.preracunaj);
@@ -156,8 +163,20 @@ export function OpremaObrazec({
       <Section title="Prodaja">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
           <Field label="Status prodaje" error={napaka("status_prodaje")}>
-            <Select name="status_prodaje" options={[...STATUSI]} placeholder="— izberi —" defaultValue={niz(oprema?.status_prodaje)} />
+            <Select
+              name="status_prodaje"
+              options={[...STATUSI]}
+              placeholder="— izberi —"
+              defaultValue={niz(oprema?.status_prodaje)}
+              onChange={(e) => setStatus(e.target.value || null)}
+              title="Status prodaje opreme (ob prodaji vpiši kupca)"
+            />
           </Field>
+          {status === STATUS_PRODANO && oprema?.status_prodaje !== STATUS_PRODANO && (
+            <div className="sm:col-span-2 2xl:col-span-3 sm:order-none">
+              <WarningText>Oprema bo označena kot prodana: vpiši kupca in datum prodaje ter shrani.</WarningText>
+            </div>
+          )}
           <Field label="Imenovani prodajalec">
             <Select
               name="imenovani_prodajalec"
@@ -210,12 +229,25 @@ export function OpremaObrazec({
                 icon={Calculator}
                 disabled={izracunana === null}
                 hint="Izračunaj prodajno ceno iz cene in rabata"
-                onClick={() => izracunana !== null && setProdajnaCena(String(izracunana))}
+                onClick={() => izracunana !== null && setProdajnaCena(formatVnos(izracunana))}
               />
             </div>
           </Field>
-          <Field label="Datum prodaje">
+          <Field label="Datum prodaje" required={obveznoObProdaji("datum_prodaje", status, oprema)} error={napaka("datum_prodaje")}>
             <TextInput type="date" name="datum_prodaje" defaultValue={niz(oprema?.datum_prodaje)} />
+          </Field>
+          <Field
+            label="Kupec"
+            required={obveznoObProdaji("kupec", status, oprema)}
+            error={napaka("kupec")}
+            className="2xl:col-span-2"
+          >
+            <TextInput
+              name="kupec"
+              defaultValue={niz(oprema?.kupec)}
+              placeholder="npr. Pekarna Novak d.o.o., Ljubljana"
+              title="Komu je bila oprema prodana"
+            />
           </Field>
           <Field label="Komentar ob prodaji" className="sm:col-span-2 2xl:col-span-3">
             <TextArea name="komentar_ob_prodaji" rows={3} defaultValue={niz(oprema?.komentar_ob_prodaji)} />
@@ -224,7 +256,7 @@ export function OpremaObrazec({
       </Section>
       </fieldset>
 
-      <Kartoteka idOprema={oprema?.id_oprema} zacetniZapisi={kartoteka} samoOgled={samoOgled} />
+      <Kartoteka idOprema={oprema?.id_oprema} zacetniZapisi={kartoteka} dnevnik={dnevnik} samoOgled={samoOgled} />
 
       <SaveBar
         steviloSprememb={spremembe.stevilo}

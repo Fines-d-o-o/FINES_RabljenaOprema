@@ -82,7 +82,9 @@ export function SaveBar({
     <div className="sticky bottom-0 z-30 flex flex-wrap items-center gap-3 rounded-xl border border-ink-200 bg-white/95 px-3 py-3 shadow-[0_-2px_8px_rgb(0_0_0/0.06)] backdrop-blur sm:px-4">
       <span className="flex min-w-0 flex-1 items-center gap-2 text-sm">
         {imaSpremembe ? (
-          <strong className="text-warn-700">Neshranjene spremembe: {steviloSprememb}</strong>
+          <strong className="text-warn-700" title="Število spremenjenih polj, ki še niso shranjena">
+            Neshranjene spremembe: {steviloSprememb}
+          </strong>
         ) : sporocilo ? (
           <span role="status" className={`flex items-center gap-2 font-semibold ${sporocilo.ok ? "text-ok-600" : "text-nok-600"}`}>
             {sporocilo.ok ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <TriangleAlert className="h-4 w-4 shrink-0" />}

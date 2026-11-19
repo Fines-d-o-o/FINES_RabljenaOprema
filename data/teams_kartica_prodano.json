@@ -1,0 +1,105 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.4",
+  "msteams": {
+    "width": "Full"
+  },
+  "body": [
+    {
+      "type": "TextBlock",
+      "text": "✅ Oprema je bila označena kot PRODANA",
+      "size": "Large",
+      "weight": "Bolder",
+      "color": "Good",
+      "wrap": true
+    },
+    {
+      "type": "TextBlock",
+      "text": "19. 11. 2026, 14:41 · označil prodaja@fines.si",
+      "isSubtle": true,
+      "size": "Small",
+      "wrap": true,
+      "spacing": "None"
+    },
+    {
+      "type": "Container",
+      "style": "warning",
+      "spacing": "Medium",
+      "items": [
+        {
+          "type": "TextBlock",
+          "text": "📦 Peč odpišite na odpremni nalog.",
+          "weight": "Bolder",
+          "wrap": true
+        }
+      ]
+    },
+    {
+      "type": "Container",
+      "style": "emphasis",
+      "spacing": "Medium",
+      "items": [
+        {
+          "type": "TextBlock",
+          "text": "Konvekcijska peč FBM 40 S CL",
+          "weight": "Bolder",
+          "size": "Medium",
+          "wrap": true
+        },
+        {
+          "type": "FactSet",
+          "facts": [
+            {
+              "title": "ID opreme",
+              "value": "136"
+            },
+            {
+              "title": "Ident",
+              "value": "100-601.1014"
+            },
+            {
+              "title": "Serijska št.",
+              "value": "24.1234.123"
+            },
+            {
+              "title": "Skupina",
+              "value": "Konvekcijske peči"
+            },
+            {
+              "title": "Skladišče",
+              "value": "Skladišče Kamnik"
+            },
+            {
+              "title": "Kupec",
+              "value": "Pekarna Novak d.o.o., Ljubljana"
+            },
+            {
+              "title": "Datum prodaje",
+              "value": "19.11.2026"
+            },
+            {
+              "title": "Prodajalec",
+              "value": "Janez Kovač"
+            }
+          ],
+          "spacing": "Small"
+        },
+        {
+          "type": "TextBlock",
+          "text": "Dostava v petek, kupec prevzame z lastnim prevozom.",
+          "wrap": true,
+          "isSubtle": true,
+          "spacing": "Small"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "type": "Action.OpenUrl",
+      "title": "Odpri opremo",
+      "url": "https://rabljena-oprema.vercel.app/oprema/136"
+    }
+  ]
+}

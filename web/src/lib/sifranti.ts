@@ -8,6 +8,24 @@ export const STATUSI = [
   "4. POSOJENO",
 ] as const;
 
+export const STATUS_PRODANO = "3. PRODANO";
+
+// Ob prodaji sta obvezna kupec in datum prodaje (preprečuje dvojno prodajo iste opreme).
+// Izjema: oprema, ki je bila prodana že prej in podatka nima - stare zapise se lahko ureja brez iskanja kupca za nazaj.
+export const OBVEZNO_OB_PRODAJI = [
+  { kljuc: "kupec", oznaka: "Kupec" },
+  { kljuc: "datum_prodaje", oznaka: "Datum prodaje" },
+] as const;
+
+export function obveznoObProdaji(
+  kljuc: (typeof OBVEZNO_OB_PRODAJI)[number]["kljuc"],
+  novStatus: string | null,
+  prej: { status_prodaje?: string | null; kupec?: string | null; datum_prodaje?: string | null } | null | undefined,
+) {
+  if (novStatus !== STATUS_PRODANO) return false;
+  return !(prej?.status_prodaje === STATUS_PRODANO && !prej?.[kljuc]);
+}
+
 export const ENOTE_MERE = ["kos", "kpl"];
 
 // Ocena stanja 1–5 in njen opis (prikaz ob oceni, filter, PDF)

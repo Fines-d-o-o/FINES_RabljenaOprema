@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useSyncExternalStore, type DragEvent, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { Camera, ImagePlus, Images, Loader2, RefreshCw, Trash2, Upload, X } from "lucide-react";
 import { ZipSlikGumb } from "@/components/PdfGumb";
 import { FilterPolje, IconButton, Section, buttonClass } from "@/components/ui";
@@ -70,7 +71,12 @@ export function SlikeUrejevalnik({
   samoOgled?: boolean; // brez pravic urejanja: slike se samo prikazujejo
 }) {
   const [stanje, setStanje] = useState(slike);
-  const nastavi = (vrsta: VrstaSlike, s: ObstojecaSlika | undefined) => setStanje((p) => ({ ...p, [vrsta]: s }));
+  const router = useRouter();
+  // Po spremembi osveži podatke strani (nov avtomatski vnos v kartoteki opreme)
+  const nastavi = (vrsta: VrstaSlike, s: ObstojecaSlika | undefined) => {
+    setStanje((p) => ({ ...p, [vrsta]: s }));
+    router.refresh();
+  };
   const mesta = MESTA_SLIK.filter((m) => vrste.includes(m.vrsta));
 
   return (

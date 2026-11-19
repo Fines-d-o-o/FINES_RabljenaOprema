@@ -4,11 +4,11 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { SLIKE_BUCKET } from "@/lib/config";
-import { NAJVISJA_OCENA, STATUSI } from "@/lib/sifranti";
+import { NAJVISJA_OCENA, OBVEZNO_OB_PRODAJI, STATUSI, STATUS_PRODANO, obveznoObProdaji } from "@/lib/sifranti";
 import { potSlike } from "@/lib/slike";
 import { createClient } from "@/lib/supabase/server";
-import { obvestiTeamsNovaOprema } from "@/lib/teams";
-import { NAMIG_SAMO_OGLED, jeSamoOgled } from "@/lib/vloga";
+import { obvestiTeamsNovaOprema, obvestiTeamsProdano } from "@/lib/teams";
+import { NAMIG_SAMO_OGLED, jeSamoOgled, prijavljeni } from "@/lib/vloga";
 
 // Odgovor za uporabnika "samo ogled" (ustreza obema oblikama odgovorov akcij)
 const ZAVRNJENO = { ok: false, sporocilo: NAMIG_SAMO_OGLED, napaka: NAMIG_SAMO_OGLED };
@@ -66,6 +66,7 @@ export async function shraniOpremo(_prej: ShraniStanje, fd: FormData): Promise<S
     rabat_procent: stevilo(fd, "rabat_procent", napake, "Rabat", 0, 100),
     prodajna_cena: stevilo(fd, "prodajna_cena", napake, "Prodajna cena", 0, 10_000_000),
     datum_prodaje: besedilo(fd, "datum_prodaje"),
+    kupec: besedilo(fd, "kupec"),
     komentar_ob_prodaji: besedilo(fd, "komentar_ob_prodaji"),
   };
   if (fd.get("garancijski_rok_meseci") === "") napake.garancijski_rok_meseci = "Izberi garancijski rok (6, 12 ali 24 mesecev).";
@@ -73,12 +74,29 @@ export async function shraniOpremo(_prej: ShraniStanje, fd: FormData): Promise<S
     napake.status_prodaje = "Neveljaven status prodaje.";
   }
 
+  const supabase = await createClient();
+  const uporabnik = await prijavljeni(supabase);
+  if (uporabnik.samoOgled) return ZAVRNJENO;
+
+  // Ob prodaji sta obvezna kupec in datum prodaje (primerja se z zadnjim shranjenim stanjem v bazi)
+  let prej: { status_prodaje: string | null; kupec: string | null; datum_prodaje: string | null } | null = null;
+  if (idProdaja) {
+    const { data } = await supabase
+      .from("rbo_prodaja")
+      .select("status_prodaje, kupec, datum_prodaje")
+      .eq("id_prodaja", Number(idProdaja))
+      .maybeSingle();
+    prej = data;
+  }
+  for (const { kljuc, oznaka } of OBVEZNO_OB_PRODAJI) {
+    if (!prodaja[kljuc] && obveznoObProdaji(kljuc, prodaja.status_prodaje, prej)) {
+      napake[kljuc] = `${oznaka} je obvezen podatek, ko je oprema prodana.`;
+    }
+  }
+
   if (Object.keys(napake).length > 0) {
     return { ok: false, sporocilo: "Preveri označena polja.", napake };
   }
-
-  const supabase = await createClient();
-  if (await jeSamoOgled(supabase)) return ZAVRNJENO;
 
   // 1) Oprema
   let id: number;
@@ -114,21 +132,49 @@ export async function shraniOpremo(_prej: ShraniStanje, fd: FormData): Promise<S
   revalidatePath("/");
   revalidatePath(`/oprema/${id}`);
 
-  if (idOprema) return { ok: true, sporocilo: "Spremembe so shranjene.", idProdaja: novaProdaja };
+  const h = await headers();
+  const izvor = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
+
+  // 3) Obvestilo v Teams ob prodaji: samo ob prehodu v PRODANO (ponovno shranjevanje ga ne pošlje znova)
+  let teamsProdanoNapaka: string | null = null;
+  if (prodaja.status_prodaje === STATUS_PRODANO && prej?.status_prodaje !== STATUS_PRODANO) {
+    teamsProdanoNapaka = await obvestiTeamsProdano({
+      id,
+      naziv: oprema.oprema_naziv!,
+      ident: oprema.koda,
+      serijska: oprema.serijska_stevilka,
+      skupina: oprema.skupina_opreme,
+      skladisce: oprema.skladisce,
+      kupec: prodaja.kupec,
+      datumProdaje: prodaja.datum_prodaje,
+      prodajnaCena: prodaja.prodajna_cena,
+      prodajalec: prodaja.imenovani_prodajalec,
+      garancijaMeseci: prodaja.garancijski_rok_meseci,
+      komentar: prodaja.komentar_ob_prodaji,
+      poslal: uporabnik.email,
+      povezava: `${izvor}/oprema/${id}`,
+    });
+  }
+
+  if (idOprema) {
+    const sporocilo = teamsProdanoNapaka
+      ? `Spremembe so shranjene, obvestilo o prodaji v Teams pa ni bilo poslano (${teamsProdanoNapaka.slice(0, 80)}). Ekipo obvesti ročno.`
+      : "Spremembe so shranjene.";
+    return { ok: true, sporocilo, idProdaja: novaProdaja };
+  }
 
   // --- Nova oprema ---
   const opozorila = new URLSearchParams({ novo: "1" });
+  if (teamsProdanoNapaka) opozorila.set("teams", teamsProdanoNapaka.slice(0, 120));
 
-  // 3) Kartoteka: zapisi, dodani na obrazcu nove opreme (pri urejanju se shranjujejo sproti)
+  // 4) Kartoteka: zapisi, dodani na obrazcu nove opreme (pri urejanju se shranjujejo sproti)
   const zapisi = preberiZapiseKartoteke(fd).map((z) => ({ ...z, id_oprema: id }));
   if (zapisi.length > 0) {
     const { error } = await supabase.from("rbo_kartoteka").insert(zapisi);
     if (error) opozorila.set("kartoteka", "napaka");
   }
 
-  // 4) Obvestilo v Teams (napaka ne prepreči shranjevanja, samo opozori)
-  const h = await headers();
-  const izvor = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
+  // 5) Obvestilo v Teams o novi opremi (napaka ne prepreči shranjevanja, samo opozori)
   const teamsNapaka = await obvestiTeamsNovaOprema({
     id,
     datumPrejema: oprema.datum_prejema,

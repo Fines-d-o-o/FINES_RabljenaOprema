@@ -8,7 +8,7 @@ import { OpremaObrazec } from "@/app/oprema/OpremaObrazec";
 import { naloziSifrante } from "@/lib/sifranti";
 import { slikeOpreme } from "@/lib/slike";
 import { createClient } from "@/lib/supabase/server";
-import type { OpremaVrstica, ZapisKartoteke } from "@/lib/types";
+import type { OpremaVrstica, ZapisDnevnika, ZapisKartoteke } from "@/lib/types";
 import { jeSamoOgled } from "@/lib/vloga";
 import { IzbrisiGumb } from "./IzbrisiGumb";
 
@@ -19,7 +19,7 @@ export default async function UrediPage({ params, searchParams }: PageProps<"/op
   if (!Number.isInteger(idOprema)) notFound();
 
   const supabase = await createClient();
-  const [opremaRes, slike, kartotekaRes, sifranti, samoOgled] = await Promise.all([
+  const [opremaRes, slike, kartotekaRes, dnevnikRes, sifranti, samoOgled] = await Promise.all([
     supabase.from("v_rbo_oprema_prodaja").select("*").eq("id_oprema", idOprema).maybeSingle(),
     slikeOpreme(supabase, idOprema),
     supabase
@@ -28,6 +28,12 @@ export default async function UrediPage({ params, searchParams }: PageProps<"/op
       .eq("id_oprema", idOprema)
       .eq("visible", true)
       .order("datum_vnosa", { ascending: false })
+      .order("id", { ascending: false }),
+    supabase
+      .from("rbo_dnevnik")
+      .select("id, cas, uporabnik, sklop, besedilo, spremembe")
+      .eq("id_oprema", idOprema)
+      .order("cas", { ascending: false })
       .order("id", { ascending: false }),
     naloziSifrante(supabase),
     jeSamoOgled(supabase),
@@ -77,6 +83,7 @@ export default async function UrediPage({ params, searchParams }: PageProps<"/op
           oprema={oprema}
           sifranti={sifranti}
           kartoteka={(kartotekaRes.data ?? []) as ZapisKartoteke[]}
+          dnevnik={(dnevnikRes.data ?? []) as ZapisDnevnika[]}
           samoOgled={samoOgled}
         />
         <div className="xl:sticky xl:top-24">

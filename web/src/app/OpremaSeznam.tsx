@@ -20,6 +20,7 @@ import {
 } from "@/components/ui";
 import { OCENE, STATUSI } from "@/lib/sifranti";
 import type { OpremaSSliko } from "@/lib/types";
+import { ujemaIskanje } from "@/lib/iskanje";
 
 type Filtri = {
   id: string;
@@ -97,15 +98,13 @@ export function OpremaSeznam({ oprema }: { oprema: OpremaSSliko[] }) {
   // Vsi filtri razen statusa (kartice statusov kažejo število glede na ostale filtre)
   const poFiltrih = useMemo(() => {
     const id = filtri.id.trim();
-    const serijska = filtri.serijska.trim().toLowerCase();
-    const besede = filtri.naziv.toLowerCase().split(/\s+/).filter(Boolean);
     return oprema.filter(
       (o) =>
         (!id || String(o.id_oprema).includes(id)) &&
         (!filtri.skupina || o.skupina_opreme === filtri.skupina) &&
         (!filtri.ocena || String(o.ocena) === filtri.ocena) &&
-        (!serijska || (o.serijska_stevilka ?? "").toLowerCase().includes(serijska)) &&
-        besede.every((b) => o.oprema_naziv.toLowerCase().includes(b)),
+        ujemaIskanje(filtri.serijska, o.serijska_stevilka) &&
+        ujemaIskanje(filtri.naziv, o.oprema_naziv),
     );
   }, [oprema, filtri]);
 
@@ -261,7 +260,9 @@ export function OpremaSeznam({ oprema }: { oprema: OpremaSSliko[] }) {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-ink-500">
-          Prikazano <strong className="text-ink-900">{prikazana.length}</strong> od {oprema.length}
+          <span title="Število opreme, ki ustreza izbranim filtrom">
+            Prikazano <strong className="text-ink-900">{prikazana.length}</strong> od {oprema.length}
+          </span>
         </p>
         <Button
           variant="neutral"
@@ -329,7 +330,9 @@ function OpremaKartica({ o, izbrana, onIzberi }: { o: OpremaSSliko; izbrana: boo
               className="h-5 w-5 cursor-pointer accent-fines-500"
             />
           </label>
-          <span className="rounded-md bg-ink-800/85 px-2 py-1 font-mono text-sm font-bold text-white">ID {o.id_oprema}</span>
+          <span className="rounded-md bg-ink-800/85 px-2 py-1 font-mono text-sm font-bold text-white" title="ID opreme v aplikaciji">
+            ID {o.id_oprema}
+          </span>
         </span>
         <span className="absolute right-3 top-3">
           <StatusBadge status={o.status_prodaje} />
