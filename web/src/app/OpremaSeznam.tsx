@@ -18,7 +18,8 @@ import {
   barvaStatusaKartice,
   imeStatusa,
 } from "@/components/ui";
-import { OCENE, STATUSI } from "@/lib/sifranti";
+import { OCENE, STATUSI, STATUS_POSOJENO } from "@/lib/sifranti";
+import { danes, doRoka, prikazDatuma } from "@/lib/datum";
 import type { OpremaSSliko } from "@/lib/types";
 import { ujemaIskanje } from "@/lib/iskanje";
 
@@ -292,6 +293,9 @@ export function OpremaSeznam({ oprema }: { oprema: OpremaSSliko[] }) {
 
 function OpremaKartica({ o, izbrana, onIzberi }: { o: OpremaSSliko; izbrana: boolean; onIzberi: () => void }) {
   const prodano = o.status_prodaje === PRODANO;
+  const posojeno = o.status_prodaje === STATUS_POSOJENO;
+  const posojaPotekla = posojeno && !o.posojeno_do_preklica && !!o.posojeno_do && o.posojeno_do < danes();
+  const rezervacijaPotekla = !!o.rezervirano && !!o.rezervirano_do && o.rezervirano_do < danes();
   // Celotna kartica je klikljiva (povezava čez celo kartico); gumbi izvoza so nad povezavo (z-10)
   return (
     <article
@@ -334,9 +338,10 @@ function OpremaKartica({ o, izbrana, onIzberi }: { o: OpremaSSliko; izbrana: boo
             ID {o.id_oprema}
           </span>
         </span>
-        <span className="absolute right-3 top-3">
+        <span className="absolute right-3 top-3 z-10 flex flex-col items-end gap-1.5">
           <StatusBadge status={o.status_prodaje} />
         </span>
+        {prodano ? <Zig vrsta="prodano" /> : o.rezervirano && <Zig vrsta="rezervirano" o={o} />}
         <GarancijaZnak meseci={o.garancijski_rok_meseci} className="absolute bottom-3 left-3" />
       </div>
 
@@ -376,6 +381,30 @@ function OpremaKartica({ o, izbrana, onIzberi }: { o: OpremaSSliko; izbrana: boo
           <dd className="font-bold tabular-nums text-fines-600" title="Prodajna cena (razdelek Prodaja)">
             {o.prodajna_cena != null ? evri(o.prodajna_cena) : "–"}
           </dd>
+          {posojeno && (
+            <>
+              <dt className="text-ink-500">Posojeno</dt>
+              <dd
+                className={`truncate font-medium ${posojaPotekla ? "font-bold text-nok-600" : ""}`}
+                title={`Posojeno: ${o.posojeno_podjetje ?? "–"}${o.posojeno_kontakt ? ` · ${o.posojeno_kontakt}` : ""}`}
+              >
+                {o.posojeno_do_preklica ? "do nadaljnjega" : o.posojeno_do ? `do ${prikazDatuma(o.posojeno_do)}` : "–"}
+                {o.posojeno_podjetje && <span className="font-normal text-ink-500"> · {o.posojeno_podjetje}</span>}
+              </dd>
+            </>
+          )}
+          {o.rezervirano && (
+            <>
+              <dt className="text-ink-500">Rezervirano</dt>
+              <dd
+                className={`truncate font-medium ${rezervacijaPotekla ? "font-bold text-warn-700" : ""}`}
+                title={`Rezerviral: ${o.rezervirano_podjetje ?? "–"}${o.rezervirano_kontakt ? ` · ${o.rezervirano_kontakt}` : ""}`}
+              >
+                {o.rezervirano_do ? `do ${prikazDatuma(o.rezervirano_do)}` : "–"}
+                {o.rezervirano_podjetje && <span className="font-normal text-ink-500"> · {o.rezervirano_podjetje}</span>}
+              </dd>
+            </>
+          )}
           <dt className="self-center text-ink-500">Stanje</dt>
           <dd>
             <Score value={o.ocena} />
@@ -386,5 +415,32 @@ function OpremaKartica({ o, izbrana, onIzberi }: { o: OpremaSSliko; izbrana: boo
         )}
       </div>
     </article>
+  );
+}
+
+// Žig čez sredino slike, nagnjen za 45°: PRODANO siv, REZERVIRANO rdeč (potekla rezervacija rumena)
+function Zig({ vrsta, o }: { vrsta: "prodano" | "rezervirano"; o?: OpremaSSliko }) {
+  const potekla = vrsta === "rezervirano" && !!o?.rezervirano_do && o.rezervirano_do < danes();
+  const barva =
+    vrsta === "prodano" ? "bg-ink-600/90 text-white" : potekla ? "bg-warn-400/95 text-ink-900" : "bg-nok-600/90 text-white";
+  const namig =
+    vrsta === "prodano"
+      ? "Oprema je prodana"
+      : `Rezervirano${o?.rezervirano_do ? ` do ${prikazDatuma(o.rezervirano_do)} (${doRoka(o.rezervirano_do)})` : ""}${
+          o?.rezervirano_podjetje ? ` - ${o.rezervirano_podjetje}` : ""
+        }`;
+  return (
+    <span className="absolute inset-0 overflow-hidden" title={namig}>
+      <span
+        className={`absolute left-1/2 top-1/2 flex w-[160%] -translate-x-1/2 -translate-y-1/2 -rotate-45 flex-col items-center py-1.5 shadow-lg ${barva}`}
+      >
+        <span className="text-lg font-black tracking-[0.25em]">
+          {vrsta === "prodano" ? "PRODANO" : potekla ? "REZERVACIJA POTEKLA" : "REZERVIRANO"}
+        </span>
+        {vrsta === "rezervirano" && o?.rezervirano_do && (
+          <span className="text-xs font-semibold">do {prikazDatuma(o.rezervirano_do)}</span>
+        )}
+      </span>
+    </span>
   );
 }

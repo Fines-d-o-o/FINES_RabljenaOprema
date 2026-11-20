@@ -92,3 +92,36 @@ export function Section({
     </section>
   );
 }
+
+/**
+ * Oštevilčen podrazdelek znotraj razdelka (vrstni red izpolnjevanja): oranžna številka, naslov,
+ * tanka črta do desnega roba in po želji gumbi desno.
+ */
+export function Podrazdelek({
+  st,
+  naslov,
+  desno,
+  children,
+  poudarjen,
+}: {
+  st: number;
+  naslov: string;
+  desno?: ReactNode;
+  children: ReactNode;
+  /** Svetlo oranžno ozadje (npr. podatki, ki jih je treba izpolniti zdaj). */
+  poudarjen?: boolean;
+}) {
+  return (
+    <div className={`flex flex-col gap-3 ${poudarjen ? "-mx-2 rounded-lg bg-fines-50 p-2 ring-1 ring-fines-200" : ""}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-fines-500 text-xs font-bold text-white">
+          {st}
+        </span>
+        <h3 className="text-sm font-bold text-ink-800">{naslov}</h3>
+        <span className="h-px min-w-8 flex-1 bg-ink-200" aria-hidden />
+        {desno}
+      </div>
+      {children}
+    </div>
+  );
+}

@@ -1,12 +1,14 @@
 "use client";
 
 import { useActionState, useRef, useState, useTransition, type FormEvent } from "react";
-import { Calculator } from "lucide-react";
+import { Bookmark, Calculator } from "lucide-react";
 import {
+  Button,
   DaNe,
   Field,
   IconButton,
   Lestvica,
+  Podrazdelek,
   SaveBar,
   ScorePicker,
   Section,
@@ -16,12 +18,31 @@ import {
   useSpremembeObrazca,
   WarningText,
 } from "@/components/ui";
-import { ENOTE_MERE, GARANCIJE, STATUSI, STATUS_PRODANO, obveznoObProdaji, type Sifranti } from "@/lib/sifranti";
+import {
+  ENOTE_MERE,
+  GARANCIJE,
+  STATUSI,
+  STATUS_POSOJENO,
+  STATUS_PRODANO,
+  obveznoObProdaji,
+  type Sifranti,
+} from "@/lib/sifranti";
 import { danes } from "@/lib/datum";
 import { NAMIG_SAMO_OGLED } from "@/lib/vloga";
 import type { OpremaVrstica, ZapisDnevnika, ZapisKartoteke } from "@/lib/types";
 import { shraniOpremo, type ShraniStanje } from "./actions";
 import { Kartoteka } from "./Kartoteka";
+import {
+  PRAZNA_POSOJA,
+  PRAZNA_REZERVACIJA,
+  PosojaOkno,
+  PosojaPovzetek,
+  RezervacijaOkno,
+  RezervacijaPolja,
+  RezervacijaPovzetek,
+  type Posoja,
+  type Rezervacija,
+} from "./PosojaRezervacija";
 import { SkenNalepke } from "@/components/sken-nalepke/SkenNalepke";
 
 const GARANCIJE_MOZNOSTI = GARANCIJE.map((m) => ({ value: m as number, label: `${m} mes.`, hint: `Garancija ${m} mesecev` }));
@@ -53,12 +74,53 @@ export function OpremaObrazec({
   const zacetnaGarancija = oprema?.garancijski_rok_meseci ?? 0;
   const [imaGarancijo, setImaGarancijo] = useState(zacetnaGarancija > 0);
   const [garancija, setGarancija] = useState<number | null>(zacetnaGarancija > 0 ? zacetnaGarancija : null);
+  const zacetnaPosoja: Posoja = oprema
+    ? {
+        od: niz(oprema.posojeno_od),
+        do: niz(oprema.posojeno_do),
+        doPreklica: !!oprema.posojeno_do_preklica,
+        podjetje: niz(oprema.posojeno_podjetje),
+        kontakt: niz(oprema.posojeno_kontakt),
+      }
+    : PRAZNA_POSOJA;
+  const [posoja, setPosoja] = useState<Posoja>(zacetnaPosoja);
+  // Okno posoje; statusPred = status pred izbiro POSOJENO (Prekliči ga vrne), null = odprto z gumbom Uredi
+  const [oknoPosoje, setOknoPosoje] = useState<{ statusPred: string | null } | null>(null);
+  const zacetnaRezervacija: Rezervacija = oprema?.rezervirano
+    ? {
+        da: true,
+        do: niz(oprema.rezervirano_do),
+        podjetje: niz(oprema.rezervirano_podjetje),
+        kontakt: niz(oprema.rezervirano_kontakt),
+      }
+    : PRAZNA_REZERVACIJA;
+  const [rezervacija, setRezervacija] = useState<Rezervacija>(zacetnaRezervacija);
+  const [oknoRezervacije, setOknoRezervacije] = useState(false);
+  // Shranjena posoja zaklene status in rezervacijo; "Zaključi posojo" ju odklene (posoja se zaključi ob shranjevanju)
+  const [shranjenStatus, setShranjenStatus] = useState<string | null>(oprema?.status_prodaje ?? null);
+  const [zakljucujemPosojo, setZakljucujemPosojo] = useState(false);
+  const statusZaklenjen = shranjenStatus === STATUS_POSOJENO && !zakljucujemPosojo;
+  const zaklepRezervacije =
+    status === STATUS_POSOJENO
+      ? "Oprema je posojena - rezervacija ni mogoča"
+      : status === STATUS_PRODANO
+        ? "Oprema je prodana - rezervacija ni mogoča"
+        : null;
   const obrazec = useRef<HTMLFormElement>(null);
-  const spremembe = useSpremembeObrazca(obrazec, [ocena, prodajnaCena, imaGarancijo, garancija]);
+  const spremembe = useSpremembeObrazca(obrazec, [ocena, prodajnaCena, imaGarancijo, garancija, status, posoja, rezervacija]);
   // Po uspešnem shranjevanju so trenutne vrednosti novo izhodišče
   const [stanje, formAction, shranjujem] = useActionState<ShraniStanje, FormData>(async (prej, fd) => {
     const r = await shraniOpremo(prej, fd);
-    if (r.ok) spremembe.potrdi();
+    if (r.ok) {
+      const s = String(fd.get("status_prodaje") ?? "") || null;
+      setShranjenStatus(s);
+      setZakljucujemPosojo(false);
+      // strežnik ob posoji / prodaji odstrani rezervacijo, ob drugem statusu počisti posojo
+      if (s === STATUS_POSOJENO || s === STATUS_PRODANO) setRezervacija(PRAZNA_REZERVACIJA);
+      if (s !== STATUS_POSOJENO) setPosoja(PRAZNA_POSOJA);
+      // izhodišče sprememb šele po posodobitvi skritih polj
+      requestAnimationFrame(spremembe.potrdi);
+    }
     return r;
   }, {});
 
@@ -72,6 +134,11 @@ export function OpremaObrazec({
     setProdajnaCena(formatVnos(oprema?.prodajna_cena));
     setImaGarancijo(zacetnaGarancija > 0);
     setGarancija(zacetnaGarancija > 0 ? zacetnaGarancija : null);
+    setPosoja(zacetnaPosoja);
+    setOknoPosoje(null);
+    setRezervacija(zacetnaRezervacija);
+    setOknoRezervacije(false);
+    setZakljucujemPosojo(false);
     requestAnimationFrame(spremembe.preracunaj);
   }
 
@@ -160,101 +227,233 @@ export function OpremaObrazec({
         </div>
       </Section>
 
-      <Section title="Prodaja">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
-          <Field label="Status prodaje" error={napaka("status_prodaje")}>
-            <Select
-              name="status_prodaje"
-              options={[...STATUSI]}
-              placeholder="— izberi —"
-              defaultValue={niz(oprema?.status_prodaje)}
-              onChange={(e) => setStatus(e.target.value || null)}
-              title="Status prodaje opreme (ob prodaji vpiši kupca)"
-            />
-          </Field>
-          {status === STATUS_PRODANO && oprema?.status_prodaje !== STATUS_PRODANO && (
-            <div className="sm:col-span-2 2xl:col-span-3 sm:order-none">
+      <Section
+        title="Prodaja"
+        actions={
+          !rezervacija.da && (
+            <Button
+              variant="primary"
+              icon={Bookmark}
+              disabled={!!zaklepRezervacije}
+              hint={zaklepRezervacije ?? "Rezerviraj opremo za kupca"}
+              onClick={() => setOknoRezervacije(true)}
+            >
+              Rezerviraj
+            </Button>
+          )
+        }
+      >
+        <RezervacijaPolja r={rezervacija} />
+        <div className="flex flex-col gap-6">
+          {/* 1) Status in prodajalec + kartice posoje / rezervacije */}
+          <Podrazdelek st={1} naslov="Status in prodajalec">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Status prodaje" error={napaka("status_prodaje")}>
+                {/* zaklenjen select se ne odda: vrednost gre v skrito polje */}
+                {statusZaklenjen && <input type="hidden" name="status_prodaje" value={niz(status)} />}
+                <Select
+                  name={statusZaklenjen ? undefined : "status_prodaje"}
+                  options={[...STATUSI]}
+                  placeholder="— izberi —"
+                  value={niz(status)}
+                  disabled={statusZaklenjen}
+                  onChange={(e) => {
+                    const nov = e.target.value || null;
+                    // Ob izbiri POSOJENO se odpre okno za vnos posoje (podjetje predlaga iz rezervacije)
+                    if (nov === STATUS_POSOJENO && status !== STATUS_POSOJENO) {
+                      if (rezervacija.da && !posoja.podjetje) {
+                        setPosoja({ ...posoja, podjetje: rezervacija.podjetje, kontakt: rezervacija.kontakt });
+                      }
+                      setOknoPosoje({ statusPred: status });
+                    }
+                    setStatus(nov);
+                  }}
+                  title={statusZaklenjen ? "Oprema je posojena - najprej zaključi posojo" : "Status prodaje opreme"}
+                />
+              </Field>
+              <Field label="Imenovani prodajalec">
+                <Select
+                  name="imenovani_prodajalec"
+                  options={sifranti.prodajalec}
+                  placeholder="— izberi —"
+                  defaultValue={niz(oprema?.imenovani_prodajalec)}
+                  title="Prodajalec, ki skrbi za prodajo opreme"
+                />
+              </Field>
+            </div>
+            {status === STATUS_POSOJENO && (
+              <PosojaPovzetek
+                posoja={posoja}
+                napake={[napaka("posojeno_od"), napaka("posojeno_do"), napaka("posojeno_podjetje")]}
+                onUredi={() => setOknoPosoje({ statusPred: STATUS_POSOJENO })}
+                onZakljuci={
+                  statusZaklenjen
+                    ? () => {
+                        setZakljucujemPosojo(true);
+                        setStatus("2. NEPRODANO");
+                      }
+                    : undefined
+                }
+              />
+            )}
+            {zakljucujemPosojo && (
+              <WarningText>
+                Posoja bo zaključena ob shranjevanju (podatki ostanejo v kartoteki). Izberi nov status, npr. »3. PRODANO«.
+              </WarningText>
+            )}
+            {rezervacija.da && (
+              <RezervacijaPovzetek
+                r={rezervacija}
+                napake={[napaka("rezervirano_do"), napaka("rezervirano_podjetje")]}
+                odstranitev={
+                  status === STATUS_PRODANO
+                    ? "Oprema bo prodana - rezervacija se ob shranjevanju odstrani."
+                    : status === STATUS_POSOJENO
+                      ? "Oprema bo posojena - rezervacija se ob shranjevanju odstrani."
+                      : undefined
+                }
+                onUredi={() => setOknoRezervacije(true)}
+                onOdstrani={() => setRezervacija(PRAZNA_REZERVACIJA)}
+              />
+            )}
+          </Podrazdelek>
+
+          {/* 2) Cena */}
+          <Podrazdelek st={2} naslov="Cena">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Field label="Cena nove (€)" error={napaka("cena_nove")}>
+                <TextInput
+                  name="cena_nove"
+                  inputMode="decimal"
+                  value={cenaNove}
+                  onChange={(e) => setCenaNove(e.target.value)}
+                  title="Cena nove enake opreme"
+                />
+              </Field>
+              <Field label="Rabat (%)" error={napaka("rabat_procent")}>
+                <TextInput
+                  name="rabat_procent"
+                  inputMode="decimal"
+                  value={rabat}
+                  onChange={(e) => setRabat(e.target.value)}
+                  title="Popust glede na ceno nove"
+                />
+              </Field>
+              <Field label="Prodajna cena (€)" error={napaka("prodajna_cena")}>
+                <div className="flex gap-2">
+                  <TextInput
+                    name="prodajna_cena"
+                    inputMode="decimal"
+                    value={prodajnaCena}
+                    onChange={(e) => setProdajnaCena(e.target.value)}
+                    placeholder={izracunana !== null ? `izračun: ${izracunana}` : ""}
+                    title="Cena, po kateri se oprema prodaja"
+                  />
+                  <IconButton
+                    variant="primary"
+                    icon={Calculator}
+                    disabled={izracunana === null}
+                    hint="Izračunaj prodajno ceno iz cene in rabata"
+                    onClick={() => izracunana !== null && setProdajnaCena(formatVnos(izracunana))}
+                  />
+                </div>
+              </Field>
+            </div>
+          </Podrazdelek>
+
+          {/* 3) Garancija */}
+          <Podrazdelek st={3} naslov="Garancija">
+            <Field label="Ali ima oprema garancijo" error={napaka("garancijski_rok_meseci")} group>
+              {/* NE = 0 mesecev; DA brez izbranega roka = prazno (napaka ob shranjevanju) */}
+              <input type="hidden" name="garancijski_rok_meseci" value={imaGarancijo ? niz(garancija) : "0"} />
+              <div className="flex flex-wrap items-center gap-3">
+                <DaNe
+                  label="Ali ima oprema garancijo"
+                  value={imaGarancijo}
+                  onChange={setImaGarancijo}
+                  hintDa="Oprema ima garancijo - izberi rok"
+                  hintNe="Oprema nima garancije"
+                />
+                <Lestvica
+                  label="Garancijski rok"
+                  options={GARANCIJE_MOZNOSTI}
+                  value={garancija}
+                  onChange={setGarancija}
+                  zaklenjeno={!imaGarancijo}
+                  zaklenjenoHint="Za izbiro roka najprej izberi DA"
+                />
+                {imaGarancijo && garancija !== null && !(GARANCIJE as readonly number[]).includes(garancija) && (
+                  <span className="text-sm text-ink-500">Trenutno {garancija} mesecev</span>
+                )}
+              </div>
+            </Field>
+          </Podrazdelek>
+
+          {/* 4) Kupec in datum prodaje (poudarjeno, ko je oprema prodana) */}
+          <Podrazdelek st={4} naslov="Kupec in datum prodaje" poudarjen={status === STATUS_PRODANO}>
+            {status === STATUS_PRODANO && shranjenStatus !== STATUS_PRODANO && (
               <WarningText>Oprema bo označena kot prodana: vpiši kupca in datum prodaje ter shrani.</WarningText>
+            )}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Field
+                label="Kupec"
+                required={obveznoObProdaji("kupec", status, oprema)}
+                error={napaka("kupec")}
+                className="sm:col-span-2"
+              >
+                <TextInput
+                  name="kupec"
+                  defaultValue={niz(oprema?.kupec)}
+                  placeholder="npr. Pekarna Novak d.o.o., Ljubljana"
+                  title="Komu je bila oprema prodana"
+                />
+              </Field>
+              <Field
+                label="Datum prodaje"
+                required={obveznoObProdaji("datum_prodaje", status, oprema)}
+                error={napaka("datum_prodaje")}
+              >
+                <TextInput type="date" name="datum_prodaje" defaultValue={niz(oprema?.datum_prodaje)} title="Datum prodaje opreme" />
+              </Field>
             </div>
-          )}
-          <Field label="Imenovani prodajalec">
-            <Select
-              name="imenovani_prodajalec"
-              options={sifranti.prodajalec}
-              placeholder="— izberi —"
-              defaultValue={niz(oprema?.imenovani_prodajalec)}
+          </Podrazdelek>
+
+          {/* 5) Komentar */}
+          <Podrazdelek st={5} naslov="Komentar ob prodaji">
+            <TextArea
+              name="komentar_ob_prodaji"
+              rows={3}
+              defaultValue={niz(oprema?.komentar_ob_prodaji)}
+              placeholder="Dogovori s kupcem, posebnosti prodaje ..."
+              aria-label="Komentar ob prodaji"
             />
-          </Field>
-          <Field label="Garancija" error={napaka("garancijski_rok_meseci")} group className="sm:col-span-2 2xl:col-span-3">
-            {/* NE = 0 mesecev; DA brez izbranega roka = prazno (napaka ob shranjevanju) */}
-            <input type="hidden" name="garancijski_rok_meseci" value={imaGarancijo ? niz(garancija) : "0"} />
-            <div className="flex flex-wrap items-center gap-3">
-              <DaNe
-                label="Ali ima oprema garancijo"
-                value={imaGarancijo}
-                onChange={setImaGarancijo}
-                hintDa="Oprema ima garancijo - izberi rok"
-                hintNe="Oprema nima garancije"
-              />
-              <Lestvica
-                label="Garancijski rok"
-                options={GARANCIJE_MOZNOSTI}
-                value={garancija}
-                onChange={setGarancija}
-                zaklenjeno={!imaGarancijo}
-                zaklenjenoHint="Za izbiro roka najprej izberi DA"
-              />
-              {imaGarancijo && garancija !== null && !(GARANCIJE as readonly number[]).includes(garancija) && (
-                <span className="text-sm text-ink-500">Trenutno {garancija} mesecev</span>
-              )}
-            </div>
-          </Field>
-          <Field label="Cena nove (€)" error={napaka("cena_nove")}>
-            <TextInput name="cena_nove" inputMode="decimal" value={cenaNove} onChange={(e) => setCenaNove(e.target.value)} />
-          </Field>
-          <Field label="Rabat (%)" error={napaka("rabat_procent")}>
-            <TextInput name="rabat_procent" inputMode="decimal" value={rabat} onChange={(e) => setRabat(e.target.value)} />
-          </Field>
-          <Field label="Prodajna cena (€)" error={napaka("prodajna_cena")}>
-            <div className="flex gap-2">
-              <TextInput
-                name="prodajna_cena"
-                inputMode="decimal"
-                value={prodajnaCena}
-                onChange={(e) => setProdajnaCena(e.target.value)}
-                placeholder={izracunana !== null ? `izračun: ${izracunana}` : ""}
-              />
-              <IconButton
-                variant="primary"
-                icon={Calculator}
-                disabled={izracunana === null}
-                hint="Izračunaj prodajno ceno iz cene in rabata"
-                onClick={() => izracunana !== null && setProdajnaCena(formatVnos(izracunana))}
-              />
-            </div>
-          </Field>
-          <Field label="Datum prodaje" required={obveznoObProdaji("datum_prodaje", status, oprema)} error={napaka("datum_prodaje")}>
-            <TextInput type="date" name="datum_prodaje" defaultValue={niz(oprema?.datum_prodaje)} />
-          </Field>
-          <Field
-            label="Kupec"
-            required={obveznoObProdaji("kupec", status, oprema)}
-            error={napaka("kupec")}
-            className="2xl:col-span-2"
-          >
-            <TextInput
-              name="kupec"
-              defaultValue={niz(oprema?.kupec)}
-              placeholder="npr. Pekarna Novak d.o.o., Ljubljana"
-              title="Komu je bila oprema prodana"
-            />
-          </Field>
-          <Field label="Komentar ob prodaji" className="sm:col-span-2 2xl:col-span-3">
-            <TextArea name="komentar_ob_prodaji" rows={3} defaultValue={niz(oprema?.komentar_ob_prodaji)} />
-          </Field>
+          </Podrazdelek>
         </div>
       </Section>
       </fieldset>
+
+      <PosojaOkno
+        open={oknoPosoje !== null}
+        zacetna={posoja}
+        onPotrdi={(p) => {
+          setPosoja(p);
+          setOknoPosoje(null);
+        }}
+        onPreklici={() => {
+          // Prekliči ob izbiri statusa: status se vrne na prejšnjega
+          if (oknoPosoje && oknoPosoje.statusPred !== STATUS_POSOJENO) setStatus(oknoPosoje.statusPred);
+          setOknoPosoje(null);
+        }}
+      />
+      <RezervacijaOkno
+        open={oknoRezervacije}
+        zacetna={rezervacija}
+        onPotrdi={(r) => {
+          setRezervacija(r);
+          setOknoRezervacije(false);
+        }}
+        onPreklici={() => setOknoRezervacije(false)}
+      />
 
       <Kartoteka idOprema={oprema?.id_oprema} zacetniZapisi={kartoteka} dnevnik={dnevnik} samoOgled={samoOgled} />
 

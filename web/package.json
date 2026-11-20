@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "lokalno": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/lokalni-zagon.ps1",
     "lint": "eslint"
   },
   "dependencies": {

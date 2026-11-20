@@ -7,8 +7,9 @@ export { FilterCheckbox, FilterIskanje, FilterIzbira, FilterNaslov, FilterPolje,
 export { Modal } from "./Modal";
 export { NavPovezava } from "./NavPovezava";
 export { ErrorText, SuccessText, WarningText } from "./Notice";
-export { Field, Section, Select, TextArea, TextInput } from "./Polja";
+export { Field, Podrazdelek, Section, Select, TextArea, TextInput } from "./Polja";
 export { SaveBar, useSpremembeObrazca } from "./SaveBar";
 export { DaNe, Lestvica, type Moznost } from "./Izbira";
+export { IzbiraRoka, izracunajRok, useIzbiraRoka, type IzbiraRokaStanje } from "./IzbiraRoka";
 export { BREZ_STATUSA, GarancijaZnak, Score, ScorePicker, StatusBadge, barvaStatusaKartice, imeStatusa } from "./Status";
 export { ToastProvider, useToast } from "./Toast";

@@ -4,7 +4,15 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { SLIKE_BUCKET } from "@/lib/config";
-import { NAJVISJA_OCENA, OBVEZNO_OB_PRODAJI, STATUSI, STATUS_PRODANO, obveznoObProdaji } from "@/lib/sifranti";
+import {
+  NAJVISJA_OCENA,
+  OBVEZNO_OB_PRODAJI,
+  STATUSI,
+  STATUS_POSOJENO,
+  STATUS_PRODANO,
+  obveznoObPosoji,
+  obveznoObProdaji,
+} from "@/lib/sifranti";
 import { potSlike } from "@/lib/slike";
 import { createClient } from "@/lib/supabase/server";
 import { obvestiTeamsNovaOprema, obvestiTeamsProdano } from "@/lib/teams";
@@ -35,6 +43,16 @@ function stevilo(fd: FormData, k: string, napake: Record<string, string>, opis: 
     return null;
   }
   return n;
+}
+
+function datum(fd: FormData, k: string, napake: Record<string, string>, opis: string) {
+  const v = besedilo(fd, k);
+  if (v === null) return null;
+  if (!DATUM.test(v)) {
+    napake[k] = `${opis} ni veljaven datum.`;
+    return null;
+  }
+  return v;
 }
 
 export async function shraniOpremo(_prej: ShraniStanje, fd: FormData): Promise<ShraniStanje> {
@@ -74,16 +92,51 @@ export async function shraniOpremo(_prej: ShraniStanje, fd: FormData): Promise<S
     napake.status_prodaje = "Neveljaven status prodaje.";
   }
 
+  // Posoja: velja samo pri statusu POSOJENO, sicer se počisti (zgodovina ostane v dnevniku)
+  const posojeno = prodaja.status_prodaje === STATUS_POSOJENO;
+  const doPreklica = posojeno && fd.get("posojeno_do_preklica") === "1";
+  const posoja = {
+    posojeno_od: posojeno ? datum(fd, "posojeno_od", napake, "Posojeno od") : null,
+    posojeno_do: posojeno && !doPreklica ? datum(fd, "posojeno_do", napake, "Posojeno do") : null,
+    posojeno_do_preklica: doPreklica,
+    posojeno_podjetje: posojeno ? besedilo(fd, "posojeno_podjetje") : null,
+    posojeno_kontakt: posojeno ? besedilo(fd, "posojeno_kontakt") : null,
+  };
+  if (posoja.posojeno_od && posoja.posojeno_do && posoja.posojeno_do < posoja.posojeno_od) {
+    napake.posojeno_do = "Datum vrnitve ne sme biti pred začetkom posoje.";
+  }
+
+  // Rezervacija: ob prodaji ali posoji se odstrani
+  const rezervirano =
+    fd.get("rezervirano") === "1" && prodaja.status_prodaje !== STATUS_PRODANO && prodaja.status_prodaje !== STATUS_POSOJENO;
+  const rezervacija = {
+    rezervirano,
+    rezervirano_do: rezervirano ? datum(fd, "rezervirano_do", napake, "Rezervirano do") : null,
+    rezervirano_podjetje: rezervirano ? besedilo(fd, "rezervirano_podjetje") : null,
+    rezervirano_kontakt: rezervirano ? besedilo(fd, "rezervirano_kontakt") : null,
+  };
+  if (rezervirano && !rezervacija.rezervirano_do && !napake.rezervirano_do) {
+    napake.rezervirano_do = "Vpiši, do kdaj je oprema rezervirana.";
+  }
+  if (rezervirano && !rezervacija.rezervirano_podjetje) napake.rezervirano_podjetje = "Vpiši, kdo je rezerviral opremo.";
+
   const supabase = await createClient();
   const uporabnik = await prijavljeni(supabase);
   if (uporabnik.samoOgled) return ZAVRNJENO;
 
-  // Ob prodaji sta obvezna kupec in datum prodaje (primerja se z zadnjim shranjenim stanjem v bazi)
-  let prej: { status_prodaje: string | null; kupec: string | null; datum_prodaje: string | null } | null = null;
+  // Ob prodaji sta obvezna kupec in datum prodaje, ob posoji podatki posoje
+  // (primerja se z zadnjim shranjenim stanjem v bazi)
+  let prej: {
+    status_prodaje: string | null;
+    kupec: string | null;
+    datum_prodaje: string | null;
+    posojeno_do: string | null;
+    posojeno_do_preklica: boolean | null;
+  } | null = null;
   if (idProdaja) {
     const { data } = await supabase
       .from("rbo_prodaja")
-      .select("status_prodaje, kupec, datum_prodaje")
+      .select("status_prodaje, kupec, datum_prodaje, posojeno_do, posojeno_do_preklica")
       .eq("id_prodaja", Number(idProdaja))
       .maybeSingle();
     prej = data;
@@ -92,6 +145,13 @@ export async function shraniOpremo(_prej: ShraniStanje, fd: FormData): Promise<S
     if (!prodaja[kljuc] && obveznoObProdaji(kljuc, prodaja.status_prodaje, prej)) {
       napake[kljuc] = `${oznaka} je obvezen podatek, ko je oprema prodana.`;
     }
+  }
+  if (obveznoObPosoji(prodaja.status_prodaje, prej)) {
+    if (!posoja.posojeno_od && !napake.posojeno_od) napake.posojeno_od = "Vpiši, od kdaj je oprema posojena.";
+    if (!posoja.posojeno_do && !doPreklica && !napake.posojeno_do) {
+      napake.posojeno_do = "Vpiši datum vrnitve ali izberi »Do nadaljnjega«.";
+    }
+    if (!posoja.posojeno_podjetje) napake.posojeno_podjetje = "Vpiši, komu je oprema posojena.";
   }
 
   if (Object.keys(napake).length > 0) {
@@ -114,13 +174,14 @@ export async function shraniOpremo(_prej: ShraniStanje, fd: FormData): Promise<S
   }
 
   // 2) Prodaja: posodobi obstoječo ali ustvari novo in jo poveži z opremo
-  const imaProdajo = Object.values(prodaja).some((v) => v !== null);
+  const imaProdajo = Object.values(prodaja).some((v) => v !== null) || rezervirano;
+  const vrstica = { ...prodaja, ...posoja, ...rezervacija };
   let novaProdaja: number | undefined;
   if (idProdaja) {
-    const { error } = await supabase.from("rbo_prodaja").update(prodaja).eq("id_prodaja", Number(idProdaja));
+    const { error } = await supabase.from("rbo_prodaja").update(vrstica).eq("id_prodaja", Number(idProdaja));
     if (error) return { ok: false, sporocilo: `Oprema je shranjena, prodaja pa ne: ${error.message}` };
   } else if (imaProdajo) {
-    const { data, error } = await supabase.from("rbo_prodaja").insert(prodaja).select("id_prodaja").single();
+    const { data, error } = await supabase.from("rbo_prodaja").insert(vrstica).select("id_prodaja").single();
     if (error) return { ok: false, sporocilo: `Oprema je shranjena, prodaja pa ne: ${error.message}` };
     const povezava = await supabase
       .from("ln_rbo_oprema_prodaja")

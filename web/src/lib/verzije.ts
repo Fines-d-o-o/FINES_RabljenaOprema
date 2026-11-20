@@ -2,6 +2,35 @@
 // Manjši popravki: 1.01 -> 1.02; nova funkcija ali podstran: 1.xx -> 2.01.
 export const VERZIJE: { verzija: string; datum: string; spremembe: string[] }[] = [
   {
+    verzija: "8.03",
+    datum: "2026-11-20",
+    spremembe: [
+      "Popravek: podatki posoje (od, vrnitev, podjetje, kontakt) se iz okna niso prenesli v obrazec, zato shranjevanje posojene opreme ni bilo mogoče.",
+      "Posoja in rezervacija uporabljata isto izbiro roka (Do datuma / Trajanje; pri posoji še Do nadaljnjega).",
+    ],
+  },
+  {
+    verzija: "8.02",
+    datum: "2026-11-20",
+    spremembe: [
+      "Razdelek Prodaja je urejen v oštevilčene korake po vrstnem redu izpolnjevanja: 1 Status in prodajalec, 2 Cena, 3 Garancija, 4 Kupec in datum prodaje (poudarjeno, ko je oprema prodana), 5 Komentar ob prodaji.",
+      "Rezervacija ni več stalno prikazana: gumb »Rezerviraj« desno v glavi razdelka odpre okno (rok do datuma ali trajanje v dneh / tednih / mesecih - ista izbira roka kot pri posoji, podjetje, kontakt). Rezervirana oprema ima kartico z gumboma »Uredi« in »Odstrani«.",
+      "Posojena oprema: status prodaje in rezervacija sta zaklenjena, dokler posoje ne zaključiš z gumbom »Zaključi posojo«. Ob posoji se rezervacija odstrani, podjetje iz rezervacije se predlaga v oknu posoje.",
+      "Domača stran: PRODANO (sivo) in REZERVIRANO (rdeče, z datumom) sta žig čez sredino slike, nagnjen za 45°; potekla rezervacija je rumena.",
+    ],
+  },
+  {
+    verzija: "8.01",
+    datum: "2026-11-20",
+    spremembe: [
+      "Posoja: ob izbiri statusa »4. POSOJENO« se odpre okno za vnos posoje - od kdaj, vrnitev (do datuma, trajanje v dneh / tednih / mesecih z izračunom datuma ali »do nadaljnjega«) in komu je posojeno (podjetje, kontakt). Prekliči vrne prejšnji status.",
+      "Pri posojeni opremi je v razdelku Prodaja povzetek posoje z gumbom »Uredi posojo«; po roku vrnitve opozorilo. Ob spremembi statusa iz POSOJENO se podatki posoje počistijo (ostanejo v dnevniku).",
+      "Rezervacija v razdelku Prodaja: DA/NE, rezervirano do, podjetje in kontakt. Ob prodaji se rezervacija odstrani.",
+      "Seznam opreme: značka »REZERVIRANO« (potekla rumena) ter vrstici »Posojeno« in »Rezervirano« na kartici (potekel rok posoje rdeče).",
+      "Vse spremembe posoje in rezervacije se zapišejo v dnevnik sprememb (kartoteka).",
+    ],
+  },
+  {
     verzija: "7.02",
     datum: "2026-11-19",
     spremembe: [

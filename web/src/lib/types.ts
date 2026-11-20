@@ -24,6 +24,17 @@ export type OpremaVrstica = {
   komentar_ob_prodaji: string | null;
   kupec: string | null;
   status_prodaje: string | null;
+  // posoja (status 4. POSOJENO)
+  posojeno_od?: string | null;
+  posojeno_do?: string | null;
+  posojeno_do_preklica?: boolean | null;
+  posojeno_podjetje?: string | null;
+  posojeno_kontakt?: string | null;
+  // rezervacija
+  rezervirano?: boolean | null;
+  rezervirano_do?: string | null;
+  rezervirano_podjetje?: string | null;
+  rezervirano_kontakt?: string | null;
   ima_tehnicni_list?: boolean;
   ima_kartoteko?: boolean;
 };

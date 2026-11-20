@@ -9,6 +9,17 @@ export const STATUSI = [
 ] as const;
 
 export const STATUS_PRODANO = "3. PRODANO";
+export const STATUS_POSOJENO = "4. POSOJENO";
+
+// Ob posoji so obvezni: od kdaj, do kdaj (ali "do nadaljnjega") in komu (podjetje).
+// Izjema kot pri prodaji: oprema, ki je bila posojena že prej in podatkov o posoji nima.
+export function obveznoObPosoji(
+  novStatus: string | null,
+  prej: { status_prodaje?: string | null; posojeno_do?: string | null; posojeno_do_preklica?: boolean | null } | null | undefined,
+) {
+  if (novStatus !== STATUS_POSOJENO) return false;
+  return !(prej?.status_prodaje === STATUS_POSOJENO && !prej?.posojeno_do && !prej?.posojeno_do_preklica);
+}
 
 // Ob prodaji sta obvezna kupec in datum prodaje (preprečuje dvojno prodajo iste opreme).
 // Izjema: oprema, ki je bila prodana že prej in podatka nima - stare zapise se lahko ureja brez iskanja kupca za nazaj.
