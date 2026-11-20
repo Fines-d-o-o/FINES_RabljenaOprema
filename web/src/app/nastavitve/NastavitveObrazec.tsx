@@ -301,16 +301,34 @@ export function NastavitveObrazec({
                   hintNe="Opomniki gredo prodajalcem (redno delovanje)"
                 />
               </Field>
+              <Field
+                label="V vednost (CC)"
+                error={napaka("opomnik_v_vednost")}
+                className="sm:col-span-3"
+              >
+                <TextInput
+                  name="opomnik_v_vednost"
+                  defaultValue={nastavitve.vVednost.join("; ")}
+                  placeholder="npr. vodja.prodaje@fines.si; skladisce@fines.si"
+                  title="E-maili, ki prejmejo vsak opomnik v vednost (ločeni s podpičjem)"
+                />
+              </Field>
             </div>
             {testniNacin ? (
               <WarningText>
-                Testni način je vklopljen: vsi opomniki gredo samo na testni naslov (z oznako [TEST] in seznamom prejemnikov, ki
-                bi ga prejeli v rednem delovanju). Ko je preizkus končan, izberi NE in shrani.
+                Testni način je vklopljen: vsi opomniki gredo samo na testni naslov (z oznako [TEST] in seznamom prejemnikov ter
+                naslovov v vednost, ki bi ga prejeli v rednem delovanju). Ko je preizkus končan, izberi NE in shrani.
               </WarningText>
             ) : (
               <p className="text-sm text-ink-700">
-                Redno delovanje. Vse opomnike prejmejo:{" "}
-                <b>{prejemnikiVsi.length ? prejemnikiVsi.join(", ") : "nihče (samo imenovani prodajalec opreme)"}</b>
+                Redno delovanje. Vsak opomnik prejme imenovani prodajalec opreme
+                {prejemnikiVsi.length ? (
+                  <>
+                    {" "}
+                    in še: <b>{prejemnikiVsi.join(", ")}</b>
+                  </>
+                ) : null}
+                ; v vednost gre naslovom iz polja »V vednost«.
               </p>
             )}
 

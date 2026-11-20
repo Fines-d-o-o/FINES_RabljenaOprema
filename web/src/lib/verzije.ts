@@ -2,6 +2,14 @@
 // Manjši popravki: 1.01 -> 1.02; nova funkcija ali podstran: 1.xx -> 2.01.
 export const VERZIJE: { verzija: string; datum: string; spremembe: string[] }[] = [
   {
+    verzija: "9.02",
+    datum: "2026-11-20",
+    spremembe: [
+      "E-mail opomniki: polje »V vednost (CC)« v Nastavitvah - našteti naslovi prejmejo vsak opomnik v vednost.",
+      "Testni e-mail pokaže prejemnike za izbrano opremo in naslove v vednost.",
+    ],
+  },
+  {
     verzija: "9.01",
     datum: "2026-11-20",
     spremembe: [

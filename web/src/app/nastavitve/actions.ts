@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { posljiTestniOpomnik, preveriInPosljiOpomnike } from "@/lib/opomniki";
+import { posljiTestniOpomnik, preveriInPosljiOpomnike, razcleniEmaile } from "@/lib/opomniki";
 import { createClient } from "@/lib/supabase/server";
 import { NAMIG_SAMO_OGLED, prijavljeni } from "@/lib/vloga";
 
@@ -51,6 +51,9 @@ export async function shraniNastavitve(_prej: NastavitveStanje, fd: FormData): P
   if (testniEmail && !EMAIL.test(testniEmail)) napake.opomnik_testni_email = "E-mail ni veljaven.";
   const testniNacin = fd.get("opomnik_testni_nacin") === "da";
   if (testniNacin && !testniEmail) napake.opomnik_testni_email = "V testnem načinu je testni naslov obvezen.";
+  const vVednost = razcleniEmaile(String(fd.get("opomnik_v_vednost") ?? ""));
+  const napacni = vVednost.filter((e) => !EMAIL.test(e));
+  if (napacni.length) napake.opomnik_v_vednost = `Ni veljaven e-mail: ${napacni.join(", ")}`;
 
   if (Object.keys(napake).length > 0) return { ok: false, sporocilo: "Popravi označena polja.", napake };
 
@@ -99,6 +102,7 @@ export async function shraniNastavitve(_prej: NastavitveStanje, fd: FormData): P
       { kljuc: "opomnik_dni_pred", vrednost: String(dni) },
       { kljuc: "opomnik_testni_email", vrednost: testniEmail || null },
       { kljuc: "opomnik_testni_nacin", vrednost: testniNacin ? "da" : "ne" },
+      { kljuc: "opomnik_v_vednost", vrednost: vVednost.join("; ") || null },
     ].map((n) => ({ ...n, spremenjeno, spremenil: uporabnik.email })),
     { onConflict: "kljuc" },
   );

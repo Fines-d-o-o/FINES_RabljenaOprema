@@ -22,9 +22,25 @@ export type NastavitveOpomnikov = {
   dniPred: number;
   testniEmail: string;
   testniNacin: boolean; // DA = vsi opomniki gredo samo na testni naslov
+  vVednost: string[]; // CC na vsakem opomniku
 };
 
-export const PRIVZETE_NASTAVITVE: NastavitveOpomnikov = { dniPred: 3, testniEmail: "", testniNacin: true };
+export const PRIVZETE_NASTAVITVE: NastavitveOpomnikov = {
+  dniPred: 3,
+  testniEmail: "",
+  testniNacin: true,
+  vVednost: [],
+};
+
+/** Seznam e-mailov iz besedila (ločeni s ; , presledkom ali novo vrstico), male črke, brez ponovitev. */
+export const razcleniEmaile = (s: string | null | undefined) => [
+  ...new Set(
+    (s ?? "")
+      .split(/[;,\s]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean),
+  ),
+];
 
 export async function naloziNastavitve(sb: SupabaseClient): Promise<NastavitveOpomnikov> {
   const { data } = await sb.from("rbo_nastavitve").select("kljuc, vrednost");
@@ -34,6 +50,7 @@ export async function naloziNastavitve(sb: SupabaseClient): Promise<NastavitveOp
     dniPred: Number.isInteger(dni) && dni >= 0 ? dni : PRIVZETE_NASTAVITVE.dniPred,
     testniEmail: m.get("opomnik_testni_email") ?? "",
     testniNacin: m.has("opomnik_testni_nacin") ? m.get("opomnik_testni_nacin") === "da" : PRIVZETE_NASTAVITVE.testniNacin,
+    vVednost: razcleniEmaile(m.get("opomnik_v_vednost")),
   };
 }
 
@@ -103,7 +120,7 @@ export function zadevaOpomnika(p: PodatkiOpomnika, test = false) {
   return `${test ? "[TEST] " : ""}Rabljeni opremi se izteka ${kaj}: ${p.oprema.oprema_naziv} (rok ${datumSl(p.rok)})`;
 }
 
-export function htmlOpomnika(p: PodatkiOpomnika, test?: { prejemniki: string[] }) {
+export function htmlOpomnika(p: PodatkiOpomnika, test?: { prejemniki: string[]; vVednost: string[] }) {
   const o = p.oprema;
   const posoja = p.vrsta === "posoja";
   const n = dniMed(p.danes, p.rok);
@@ -135,7 +152,8 @@ export function htmlOpomnika(p: PodatkiOpomnika, test?: { prejemniki: string[] }
   const testniPas = test
     ? `<tr><td style="padding:12px 24px;background:${B.rumena};border-bottom:2px solid ${B.rumenaRob};font-size:14px;color:${B.temna};">
          <b>TESTNI E-MAIL</b> - poslan samo na testni naslov.<br>
-         Prejemniki v rednem delovanju: ${test.prejemniki.length ? esc(test.prejemniki.join(", ")) : "<i>ni nastavljenih (dodaj e-maile prodajalcem)</i>"}
+         Prejemniki v rednem delovanju (za to opremo): ${test.prejemniki.length ? esc(test.prejemniki.join(", ")) : "<i>ni nastavljenih (dodaj e-maile prodajalcem)</i>"}<br>
+         V vednost: ${test.vVednost.length ? esc(test.vVednost.join(", ")) : "<i>nihče</i>"}
        </td></tr>`
     : "";
 
@@ -182,7 +200,14 @@ export function htmlOpomnika(p: PodatkiOpomnika, test?: { prejemniki: string[] }
 // Pošiljanje prek Power Automate
 
 /** Vrne null ob uspehu, sicer besedilo napake. */
-export async function posljiEmail(e: { to: string[]; subject: string; html: string; vrsta: string; test: boolean }) {
+export async function posljiEmail(e: {
+  to: string[];
+  cc: string[];
+  subject: string;
+  html: string;
+  vrsta: string;
+  test: boolean;
+}) {
   const url = process.env.EMAIL_WEBHOOK_OPOMNIKI;
   if (!url) return "Povezava s Power Automate ni nastavljena (EMAIL_WEBHOOK_OPOMNIKI).";
   if (e.to.length === 0) return "Ni prejemnikov.";
@@ -190,7 +215,14 @@ export async function posljiEmail(e: { to: string[]; subject: string; html: stri
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to: e.to.join(";"), subject: e.subject, html: e.html, vrsta: e.vrsta, test: e.test }),
+      body: JSON.stringify({
+        to: e.to.join(";"),
+        cc: e.cc.filter((x) => !e.to.includes(x)).join(";"),
+        subject: e.subject,
+        html: e.html,
+        vrsta: e.vrsta,
+        test: e.test,
+      }),
       signal: AbortSignal.timeout(15_000),
     });
     if (r.ok) return null;
@@ -260,11 +292,13 @@ export async function preveriInPosljiOpomnike(
     }
     const redni = prejemnikiZa(prodajalci, k.o.imenovani_prodajalec);
     const to = nast.testniNacin ? [nast.testniEmail] : redni;
+    const cc = nast.testniNacin ? [] : nast.vVednost;
     const podatki: PodatkiOpomnika = { vrsta: k.vrsta, oprema: k.o, rok: k.rok, danes, povezava: `${izvor}/oprema/${k.o.id_oprema}` };
     const napaka = await posljiEmail({
       to,
       subject: zadevaOpomnika(podatki, nast.testniNacin),
-      html: htmlOpomnika(podatki, nast.testniNacin ? { prejemniki: redni } : undefined),
+      cc,
+      html: htmlOpomnika(podatki, nast.testniNacin ? { prejemniki: redni, vVednost: nast.vVednost } : undefined),
       vrsta: k.vrsta,
       test: nast.testniNacin,
     });
@@ -273,7 +307,7 @@ export async function preveriInPosljiOpomnike(
       id_oprema: k.o.id_oprema,
       id_prodaja: k.o.id_prodaja,
       rok: k.rok,
-      prejemniki: to.join("; "),
+      prejemniki: [to.join("; "), cc.length ? `v vednost: ${cc.join("; ")}` : ""].filter(Boolean).join(" | "),
       testni: nast.testniNacin,
       poslal,
       napaka,
@@ -329,8 +363,9 @@ export async function posljiTestniOpomnik(sb: SupabaseClient, { izvor, poslal }:
   const redni = prejemnikiZa(prodajalci, oprema.imenovani_prodajalec);
   const napaka = await posljiEmail({
     to: [nast.testniEmail],
+    cc: [],
     subject: zadevaOpomnika(podatki, true),
-    html: htmlOpomnika(podatki, { prejemniki: redni }),
+    html: htmlOpomnika(podatki, { prejemniki: redni, vVednost: nast.vVednost }),
     vrsta: "test",
     test: true,
   });
