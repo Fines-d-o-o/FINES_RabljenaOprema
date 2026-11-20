@@ -75,7 +75,7 @@ export async function naloziSifrante(supabase: SupabaseClient): Promise<Sifranti
       const { tabela, stolpec, pogled } = TABELE[kljuc];
       // Prodajalci: samo aktivni iz Nastavitev (trenutno izbrani pri opremi doda obrazec)
       if (kljuc === "prodajalec") {
-        const aktivni = await supabase.from(tabela).select("naziv").eq("aktiven", true).order("vrstni_red").order("naziv");
+        const aktivni = await supabase.from(tabela).select("naziv").eq("aktiven", true).eq("visible", true).order("vrstni_red").order("naziv");
         if (!aktivni.error) return [kljuc, (aktivni.data ?? []).map((r: { naziv: string }) => r.naziv)] as const;
       }
       const [sif, podatki] = await Promise.all([

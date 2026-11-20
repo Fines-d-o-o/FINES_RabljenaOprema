@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useActionState, useRef, useState, useTransition, type FormEvent } from "react";
-import { BellRing, CheckCircle2, Mail, Plus, Send, XCircle } from "lucide-react";
+import { BellRing, CheckCircle2, Mail, Plus, Send, Trash2, XCircle } from "lucide-react";
 import {
   Button,
   DaNe,
   Field,
+  IconButton,
   Section,
   SaveBar,
   TextInput,
@@ -31,10 +32,17 @@ export type PoslanOpomnik = {
   napaka: string | null;
 };
 
-type Vrstica = { naziv: string; email: string; prejema_opomnike: boolean; aktiven: boolean; nov?: boolean };
+// prej = ime, kot je shranjeno (prazno pri novem prodajalcu); drugačno ime = preimenovanje
+type Vrstica = { naziv: string; prej: string; email: string; prejema_opomnike: boolean; aktiven: boolean };
 
 const vVrstice = (p: Prodajalec[]): Vrstica[] =>
-  p.map((x) => ({ naziv: x.naziv, email: x.email ?? "", prejema_opomnike: x.prejema_opomnike, aktiven: x.aktiven }));
+  p.map((x) => ({
+    naziv: x.naziv,
+    prej: x.naziv,
+    email: x.email ?? "",
+    prejema_opomnike: x.prejema_opomnike,
+    aktiven: x.aktiven,
+  }));
 
 const datumSl = (d: string | null) => (d ? d.slice(0, 10).split("-").reverse().join(".") : "");
 const casSl = (t: string) =>
@@ -103,16 +111,19 @@ export function NastavitveObrazec({
 }) {
   const obvesti = useToast();
   const [prodajalci, setProdajalci] = useState<Vrstica[]>(() => vVrstice(zacetni));
+  const [odstranjeni, setOdstranjeni] = useState<string[]>([]);
   const [testniNacin, setTestniNacin] = useState(nastavitve.testniNacin);
   const [, startTransition] = useTransition();
   const [posiljam, setPosiljam] = useState<"test" | "zdaj" | null>(null);
 
   const obrazec = useRef<HTMLFormElement>(null);
-  const spremembe = useSpremembeObrazca(obrazec, [prodajalci, testniNacin]);
+  const spremembe = useSpremembeObrazca(obrazec, [prodajalci, odstranjeni, testniNacin]);
   const [stanje, formAction, shranjujem] = useActionState<NastavitveStanje, FormData>(async (prej, fd) => {
     const r = await shraniNastavitve(prej, fd);
     if (r.ok) {
-      setProdajalci((p) => p.map((x) => ({ ...x, nov: false })));
+      // shranjeno ime postane izhodišče, odstranjeni so shranjeni
+      setProdajalci((p) => p.map((x) => ({ ...x, naziv: x.naziv.trim(), prej: x.naziv.trim() })));
+      setOdstranjeni([]);
       requestAnimationFrame(spremembe.potrdi);
     }
     return r;
@@ -128,12 +139,20 @@ export function NastavitveObrazec({
   function ponastavi() {
     obrazec.current?.reset();
     setProdajalci(vVrstice(zacetni));
+    setOdstranjeni([]);
     setTestniNacin(nastavitve.testniNacin);
     requestAnimationFrame(spremembe.preracunaj);
   }
 
   const uredi = (i: number, sprememba: Partial<Vrstica>) =>
     setProdajalci((p) => p.map((x, j) => (j === i ? { ...x, ...sprememba } : x)));
+
+  // Odstrani: nov (neshranjen) se samo umakne, shranjen se ob shranjevanju skrije (ostane v bazi in pri opremi)
+  function odstrani(i: number) {
+    const p = prodajalci[i];
+    if (p.prej) setOdstranjeni((o) => [...o, p.prej]);
+    setProdajalci((v) => v.filter((_, j) => j !== i));
+  }
 
   async function poslji(kaj: "test" | "zdaj") {
     setPosiljam(kaj);
@@ -161,8 +180,9 @@ export function NastavitveObrazec({
       <input
         type="hidden"
         name="prodajalci"
-        value={JSON.stringify(prodajalci.map(({ naziv, email, prejema_opomnike, aktiven }) => ({ naziv, email, prejema_opomnike, aktiven })))}
+        value={JSON.stringify(prodajalci)}
       />
+      <input type="hidden" name="odstranjeni" value={JSON.stringify(odstranjeni)} />
       <fieldset disabled={samoOgled} className="flex min-w-0 flex-col gap-4">
         {/* 1) Prodajalci */}
         <Section
@@ -172,7 +192,7 @@ export function NastavitveObrazec({
               variant="success"
               icon={Plus}
               hint="Dodaj novega prodajalca na seznam"
-              onClick={() => setProdajalci((p) => [...p, { naziv: "", email: "", prejema_opomnike: false, aktiven: true, nov: true }])}
+              onClick={() => setProdajalci((p) => [...p, { naziv: "", prej: "", email: "", prejema_opomnike: false, aktiven: true }])}
             >
               Dodaj prodajalca
             </Button>
@@ -180,30 +200,27 @@ export function NastavitveObrazec({
         >
           <p className="mb-3 text-sm text-ink-500">
             Aktivni prodajalci so v spustnem seznamu »Imenovani prodajalec«. Opomnik o poteku dobi imenovani prodajalec opreme
-            in vsi, ki imajo označeno »Prejema vse opomnike«. Prodajalca se ne briše: označi ga kot neaktivnega (pri opremi,
-            kjer je že izbran, ostane).
+            in vsi, ki imajo označeno »Prejema vse opomnike«. Sprememba imena se prenese tudi na opremo, kjer je prodajalec
+            izbran. Odstranjen prodajalec ni več na seznamu, pri opremi, kjer je že izbran, pa ostane zapisan.
           </p>
           <div className="flex flex-col divide-y divide-ink-100">
             {prodajalci.map((p, i) => (
               <div
                 key={i}
-                className={`grid grid-cols-1 items-start gap-x-4 gap-y-1 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto_auto] ${
+                className={`grid grid-cols-1 items-start gap-x-4 gap-y-1 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto_auto_auto] ${
                   p.aktiven ? "" : "opacity-60"
                 }`}
               >
                 <Field label="Ime" error={napaka(`prodajalec_${i}_naziv`)}>
                   <TextInput
                     value={p.naziv}
-                    readOnly={!p.nov}
                     onChange={(e) => uredi(i, { naziv: e.target.value })}
                     placeholder="Priimek Ime"
-                    title={
-                      p.nov
-                        ? "Ime prodajalca, kot bo v spustnem seznamu"
-                        : "Ime je shranjeno pri opremi in se ne spreminja - za novo ime dodaj prodajalca"
-                    }
-                    className={p.nov ? "" : "bg-ink-50"}
+                    title="Ime prodajalca v spustnem seznamu (sprememba velja tudi pri opremi)"
                   />
+                  {p.prej && p.prej !== p.naziv.trim() && (
+                    <span className="mt-1 text-xs text-warn-700">Prej: {p.prej} - ime se popravi tudi pri opremi</span>
+                  )}
                 </Field>
                 <Field label="E-mail" error={napaka(`prodajalec_${i}_email`)}>
                   <TextInput
@@ -230,9 +247,22 @@ export function NastavitveObrazec({
                     hint="Neaktiven prodajalec ni v spustnem seznamu in ne prejema opomnikov"
                   />
                 </div>
+                <div className="flex sm:pt-5">
+                  <IconButton
+                    variant="danger"
+                    icon={Trash2}
+                    hint={p.naziv ? `Odstrani prodajalca ${p.naziv} s seznama` : "Odstrani prodajalca s seznama"}
+                    onClick={() => odstrani(i)}
+                  />
+                </div>
               </div>
             ))}
             {prodajalci.length === 0 && <p className="py-3 text-sm text-ink-500">Ni prodajalcev. Dodaj prvega.</p>}
+            {odstranjeni.length > 0 && (
+              <p className="py-3 text-sm font-semibold text-nok-600">
+                Ob shranjevanju bodo odstranjeni: {odstranjeni.join(", ")}
+              </p>
+            )}
           </div>
         </Section>
 

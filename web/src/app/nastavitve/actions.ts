@@ -10,7 +10,8 @@ export type NastavitveStanje = { ok?: boolean; sporocilo?: string; napake?: Reco
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
-type ProdajalecVnos = { naziv: string; email: string; prejema_opomnike: boolean; aktiven: boolean; nov?: boolean };
+// prej = ime, kot je shranjeno v bazi (prazno pri novem); drugačno ime = preimenovanje
+type ProdajalecVnos = { naziv: string; prej: string; email: string; prejema_opomnike: boolean; aktiven: boolean };
 
 async function izvor() {
   const h = await headers();
@@ -24,8 +25,10 @@ export async function shraniNastavitve(_prej: NastavitveStanje, fd: FormData): P
 
   const napake: Record<string, string> = {};
   let prodajalci: ProdajalecVnos[] = [];
+  let odstranjeni: string[] = [];
   try {
     prodajalci = JSON.parse(String(fd.get("prodajalci") ?? "[]"));
+    odstranjeni = JSON.parse(String(fd.get("odstranjeni") ?? "[]"));
   } catch {
     return { ok: false, sporocilo: "Seznam prodajalcev ni berljiv." };
   }
@@ -51,12 +54,39 @@ export async function shraniNastavitve(_prej: NastavitveStanje, fd: FormData): P
 
   if (Object.keys(napake).length > 0) return { ok: false, sporocilo: "Popravi označena polja.", napake };
 
+  // 1) Odstranjeni: ostanejo v bazi (visible = false), pri opremi ostane ime
+  if (odstranjeni.length > 0) {
+    const { error } = await supabase.from("rbo_sif_prodajalec").update({ visible: false }).in("naziv", odstranjeni);
+    if (error) return { ok: false, sporocilo: `Odstranitev prodajalcev ni uspela: ${error.message}` };
+  }
+
+  // 2) Preimenovani: novo ime v šifrantu in pri vsej opremi, kjer je izbran (zapiše se v dnevnik opreme)
+  for (const p of prodajalci.filter((x) => x.prej && x.prej !== x.naziv)) {
+    const { error } = await supabase.from("rbo_sif_prodajalec").update({ naziv: p.naziv }).eq("naziv", p.prej);
+    if (error) {
+      return {
+        ok: false,
+        sporocilo:
+          error.code === "23505"
+            ? `Ime »${p.naziv}« že obstaja (lahko med odstranjenimi prodajalci). Izberi drugo ime.`
+            : `Preimenovanje »${p.prej}« ni uspelo: ${error.message}`,
+      };
+    }
+    const { error: e } = await supabase
+      .from("rbo_prodaja")
+      .update({ imenovani_prodajalec: p.naziv })
+      .eq("imenovani_prodajalec", p.prej);
+    if (e) return { ok: false, sporocilo: `Ime je spremenjeno, pri opremi pa ne: ${e.message}` };
+  }
+
+  // 3) Podatki in vrstni red vseh prikazanih (novi se dodajo)
   const { error: e1 } = await supabase.from("rbo_sif_prodajalec").upsert(
     prodajalci.map((p, i) => ({
       naziv: p.naziv,
       email: p.email || null,
       prejema_opomnike: p.prejema_opomnike,
       aktiven: p.aktiven,
+      visible: true,
       vrstni_red: i + 1,
     })),
     { onConflict: "naziv" },

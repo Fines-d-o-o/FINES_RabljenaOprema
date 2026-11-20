@@ -41,6 +41,7 @@ export async function naloziProdajalce(sb: SupabaseClient): Promise<Prodajalec[]
   const { data } = await sb
     .from("rbo_sif_prodajalec")
     .select("naziv, email, prejema_opomnike, aktiven, vrstni_red")
+    .eq("visible", true)
     .order("vrstni_red")
     .order("naziv");
   return (data ?? []) as Prodajalec[];
