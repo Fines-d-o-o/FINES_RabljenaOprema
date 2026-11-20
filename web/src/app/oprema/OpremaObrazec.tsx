@@ -274,10 +274,14 @@ export function OpremaObrazec({
               <Field label="Imenovani prodajalec">
                 <Select
                   name="imenovani_prodajalec"
-                  options={sifranti.prodajalec}
+                  options={
+                    oprema?.imenovani_prodajalec && !sifranti.prodajalec.includes(oprema.imenovani_prodajalec)
+                      ? [...sifranti.prodajalec, oprema.imenovani_prodajalec]
+                      : sifranti.prodajalec
+                  }
                   placeholder="— izberi —"
                   defaultValue={niz(oprema?.imenovani_prodajalec)}
-                  title="Prodajalec, ki skrbi za prodajo opreme"
+                  title="Prodajalec, ki skrbi za prodajo (prejme opomnike o poteku)"
                 />
               </Field>
             </div>

@@ -29,6 +29,13 @@ Skupna pravila so v `../FINES_Standardi/app_instructions.md` (uvoženo v `CLAUDE
 - Domača stran: PRODANO (siv) in REZERVIRANO (rdeč, z datumom; potekla rezervacija rumena) sta žig čez sredino slike pod kotom 45°.
 - Stolpci so v `rbo_prodaja` (`20261120000000_posoja_rezervacija.sql`); `posojeno_do` in `rezervirano_do` sta osnova za opomnike o poteku (e-mail / Teams - še v dogovoru).
 
+## Nastavitve in e-mail opomniki
+- Stran `/nastavitve` (zobnik, bel `IconButton`, desno od "Dodaj rabljeno opremo"): 1. Prodajalci in e-maili (`rbo_sif_prodajalec`: email, prejema_opomnike, aktiven; ime obstoječega se ne spreminja, ne briše se - neaktiven), 2. E-mail opomniki (`rbo_nastavitve`: dni pred rokom, testni e-mail, testni način), 3. Poslani opomniki (`rbo_opomniki`). Migracija `20261121000000_nastavitve_opomniki.sql`.
+- Spustni seznam "Imenovani prodajalec" = aktivni prodajalci (+ že izbrani pri opremi).
+- Opomnik: Vercel Cron (`web/vercel.json`, 06:00 UTC) -> `/api/opomniki` (`CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`; pot je izvzeta iz prijave v `proxy.ts`). Ko je do `posojeno_do` / `rezervirano_do` `dni pred rokom` ali manj (in rok še ni potekel), se pošlje e-mail; enkrat za isti rok (`rbo_opomniki`), ob podaljšanju znova.
+- Prejemniki: imenovani prodajalec opreme + vsi s "Prejema vse opomnike" (aktivni, z e-mailom). V testnem načinu samo testni naslov, zadeva "[TEST]" in rumen pas s prejemniki rednega delovanja.
+- E-mail (zadeva + HTML kartica za Outlook) sestavi aplikacija (`web/src/lib/opomniki.ts`), Power Automate flow ga samo pošlje (`EMAIL_WEBHOOK_OPOMNIKI`; telo: `to` (ločeno s ;), `subject`, `html`, `vrsta`, `test`). Ob spremembi vsebine se flow ne spreminja.
+
 ## Kartoteka in dnevnik sprememb
 - Kartoteka opreme prikazuje ročne zapise (`rbo_kartoteka`, lahko se izbrišejo) in avtomatske vnose (`rbo_dnevnik`) na isti časovnici. Avtomatski vnos ima sivo piko in značko "Avtomatski vnos · sklop", datum z uro in uporabnika; ni ga mogoče izbrisati ali urejati.
 - Avtomatske vnose pišejo **triggerji v bazi** (`20261119000000_dnevnik_kupec.sql`), ne aplikacija: dodana oprema, vsak spremenjen podatek (iz A v B) opreme, prodaje in tehničnega lista, dodana / zamenjana / odstranjena slika, izbrisan ročni zapis, izbris opreme. Nov podatek, ki naj se beleži, se doda v `rbo_dnevnik_polja` (oznaka) in po potrebi oblikovanje v `rbo_dnevnik_vrednost`.

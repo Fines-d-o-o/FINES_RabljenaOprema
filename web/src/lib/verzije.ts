@@ -2,6 +2,15 @@
 // Manjši popravki: 1.01 -> 1.02; nova funkcija ali podstran: 1.xx -> 2.01.
 export const VERZIJE: { verzija: string; datum: string; spremembe: string[] }[] = [
   {
+    verzija: "9.01",
+    datum: "2026-11-20",
+    spremembe: [
+      "Nastavitve (zobnik desno od »Dodaj rabljeno opremo«): seznam prodajalcev z e-maili - dodajanje, »Prejema vse opomnike« in »Aktiven«. Spustni seznam »Imenovani prodajalec« prikaže samo aktivne prodajalce (pri opremi ostane že izbrani).",
+      "E-mail opomnik o poteku posoje in rezervacije: vsak dan ob 7.00 aplikacija preveri roke in nekaj dni pred rokom (privzeto 3) pošlje e-mail v obliki kartice imenovanemu prodajalcu in vsem, ki prejemajo vse opomnike. Isti rok se pošlje samo enkrat, ob podaljšanju znova.",
+      "Testni način (vsi opomniki samo na testni naslov), gumb »Pošlji testni e-mail« in »Preveri in pošlji opomnike zdaj« ter seznam zadnjih poslanih opomnikov.",
+    ],
+  },
+  {
     verzija: "8.03",
     datum: "2026-11-20",
     spremembe: [

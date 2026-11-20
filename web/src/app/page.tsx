@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Settings } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { Button, ErrorText, buttonClass } from "@/components/ui";
+import { Button, ErrorText, buttonClass, iconButtonClass } from "@/components/ui";
 import { NAMIG_SAMO_OGLED, jeSamoOgled } from "@/lib/vloga";
 import { OpremaSeznam } from "@/app/OpremaSeznam";
 import { AiIskanje } from "@/components/ai-iskanje/AiIskanje";
@@ -32,16 +32,26 @@ export default async function HomePage() {
       title="Rabljena oprema"
       subtitle="Upravljanje in pregled rabljene Fines opreme"
       actions={
-        samoOgled ? (
-          <Button variant="success" icon={Plus} disabled hint={NAMIG_SAMO_OGLED}>
-            Dodaj rabljeno opremo
-          </Button>
-        ) : (
-          <Link href="/dodaj" className={buttonClass("success")} title="Dodaj novo rabljeno opremo na seznam">
-            <Plus className="h-4 w-4 shrink-0" aria-hidden />
-            Dodaj rabljeno opremo
+        <>
+          {samoOgled ? (
+            <Button variant="success" icon={Plus} disabled hint={NAMIG_SAMO_OGLED}>
+              Dodaj rabljeno opremo
+            </Button>
+          ) : (
+            <Link href="/dodaj" className={buttonClass("success")} title="Dodaj novo rabljeno opremo na seznam">
+              <Plus className="h-4 w-4 shrink-0" aria-hidden />
+              Dodaj rabljeno opremo
+            </Link>
+          )}
+          <Link
+            href="/nastavitve"
+            className={iconButtonClass("neutral")}
+            title="Nastavitve: prodajalci, e-maili in opomniki"
+            aria-label="Nastavitve"
+          >
+            <Settings className="h-5 w-5" aria-hidden />
           </Link>
-        )
+        </>
       }
     >
       {error ? (

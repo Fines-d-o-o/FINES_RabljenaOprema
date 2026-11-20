@@ -34,5 +34,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|ttf|txt|tar)$).*)"],
+  // api/opomniki: dnevni Vercel Cron brez prijave (zaščiten s CRON_SECRET v sami poti)
+  matcher: ["/((?!api/opomniki|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|ttf|txt|tar)$).*)"],
 };
