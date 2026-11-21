@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npm --prefix web run lokalno*)",
+      "Bash(npm --prefix web run lokalno*)",
+      "PowerShell(npm --prefix web run build)",
+      "Bash(npm --prefix web run build)"
+    ]
+  }
+}
