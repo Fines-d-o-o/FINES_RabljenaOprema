@@ -1,6 +1,15 @@
 // Zgodovina sprememb (gumb "i" v glavi). Najnovejša verzija je prva.
 // Manjši popravki: 1.01 -> 1.02; nova funkcija ali podstran: 1.xx -> 2.01.
-export const VERZIJE: { verzija: string; datum: string; spremembe: string[] }[] = [
+// navodilo = ime video / PDF navodila v bucketu rbo-navodila (navodila/opisi/<ime>.mjs); v oknu "i" ikona videa.
+export const VERZIJE: { verzija: string; datum: string; spremembe: string[]; navodilo?: string }[] = [
+  {
+    verzija: "10.01",
+    datum: "2026-11-25",
+    spremembe: [
+      "Video navodila: verzija, ki ima navodilo, ima v tem oknu desno ob naslovu ikono videa. Klik pokaže kratek video s podnapisi (kaj klikniti, korak za korakom) ter gumba »Prenesi video« in »Prenesi PDF« (navodilo na eni strani za vsako funkcijo).",
+      "Prvo navodilo: rezervacija in posoja opreme (verziji 8.01 in 8.02).",
+    ],
+  },
   {
     verzija: "9.02",
     datum: "2026-11-20",
@@ -29,6 +38,7 @@ export const VERZIJE: { verzija: string; datum: string; spremembe: string[] }[] 
   {
     verzija: "8.02",
     datum: "2026-11-20",
+    navodilo: "posoja-rezervacija",
     spremembe: [
       "Razdelek Prodaja je urejen v oštevilčene korake po vrstnem redu izpolnjevanja: 1 Status in prodajalec, 2 Cena, 3 Garancija, 4 Kupec in datum prodaje (poudarjeno, ko je oprema prodana), 5 Komentar ob prodaji.",
       "Rezervacija ni več stalno prikazana: gumb »Rezerviraj« desno v glavi razdelka odpre okno (rok do datuma ali trajanje v dneh / tednih / mesecih - ista izbira roka kot pri posoji, podjetje, kontakt). Rezervirana oprema ima kartico z gumboma »Uredi« in »Odstrani«.",
@@ -39,6 +49,7 @@ export const VERZIJE: { verzija: string; datum: string; spremembe: string[] }[] 
   {
     verzija: "8.01",
     datum: "2026-11-20",
+    navodilo: "posoja-rezervacija",
     spremembe: [
       "Posoja: ob izbiri statusa »4. POSOJENO« se odpre okno za vnos posoje - od kdaj, vrnitev (do datuma, trajanje v dneh / tednih / mesecih z izračunom datuma ali »do nadaljnjega«) in komu je posojeno (podjetje, kontakt). Prekliči vrne prejšnji status.",
       "Pri posojeni opremi je v razdelku Prodaja povzetek posoje z gumbom »Uredi posojo«; po roku vrnitve opozorilo. Ob spremembi statusa iz POSOJENO se podatki posoje počistijo (ostanejo v dnevniku).",
@@ -158,3 +169,8 @@ export const VERZIJE: { verzija: string; datum: string; spremembe: string[] }[] 
 ];
 
 export const TRENUTNA_VERZIJA = VERZIJE[0].verzija;
+
+// Naslovi video / PDF navodil (ključ = polje navodilo pri verziji)
+export const NASLOVI_NAVODIL: Record<string, string> = {
+  "posoja-rezervacija": "Rezervacija in posoja opreme",
+};

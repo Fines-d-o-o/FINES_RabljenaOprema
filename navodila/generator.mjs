@@ -2,6 +2,8 @@
 //
 //   npm --prefix navodila run navodila -- posoja-rezervacija            (video + slike + PDF)
 //   npm --prefix navodila run navodila -- posoja-rezervacija --samo-pdf (PDF iz shranjenih slik)
+//   npm --prefix navodila run navodila -- posoja-rezervacija --objavi   (naloži video.mp4 in navodilo.pdf v bucket
+//                                                                       rbo-navodila/<ime>/ - aplikacija ju pokaže v oknu "i")
 //
 // - Aplikacija mora teči lokalno (npm run lokalno v web/, http://localhost:3002) ali NAVODILA_URL.
 // - Prijava: ob prvem zagonu se odpre brskalnik, prijaviš se ročno; seja se shrani v
@@ -25,8 +27,10 @@ const KOREN = dirname(fileURLToPath(import.meta.url));
 const WEB = join(KOREN, "..", "web");
 const ime = process.argv[2];
 const SAMO_PDF = process.argv.includes("--samo-pdf");
+const OBJAVI = process.argv.includes("--objavi");
+const BUCKET = "rbo-navodila"; // migracija 20261125000000_navodila.sql
 if (!ime || ime.startsWith("--")) {
-  console.error("Uporaba: npm --prefix navodila run navodila -- <ime> [--samo-pdf]   (opis: navodila/opisi/<ime>.mjs)");
+  console.error("Uporaba: npm --prefix navodila run navodila -- <ime> [--samo-pdf | --objavi]   (opis: navodila/opisi/<ime>.mjs)");
   process.exit(1);
 }
 const spec = (await import(pathToFileURL(join(KOREN, "opisi", `${ime}.mjs`)).href)).default;
@@ -59,6 +63,8 @@ async function zagotoviPrijavo(browser) {
     const p = await ctx.newPage();
     await p.goto(`${URL_APP}/`);
     const ok = !p.url().includes("/prijava");
+    // aplikacija ob obisku osveži sejo (žeton velja 1 uro) - shrani osveženo, da jo uporabi tudi dostop do baze
+    if (ok) await ctx.storageState({ path: PRIJAVA });
     await ctx.close();
     if (ok) return;
     console.log("Shranjena prijava je potekla.");
@@ -470,10 +476,25 @@ async function narediPdf(browser, slike) {
   return `${strani} strani -> ${pot}`;
 }
 
+// ---------- Objava v Supabase Storage (po pregledu) ----------
+async function objavi(sb) {
+  for (const [ime_d, vrsta] of [["video.mp4", "video/mp4"], ["navodilo.pdf", "application/pdf"]]) {
+    const pot = join(IZHOD, ime_d);
+    if (!existsSync(pot)) throw new Error(`Ni datoteke ${pot} - najprej generiraj navodilo.`);
+    const { error } = await sb.storage.from(BUCKET).upload(`${ime}/${ime_d}`, readFileSync(pot), { contentType: vrsta, upsert: true });
+    if (error) throw new Error(`Nalaganje ${ime_d} ni uspelo: ${error.message} (je migracija 20261125000000_navodila.sql pognana?)`);
+    console.log(`Objavljeno: ${BUCKET}/${ime}/${ime_d}`);
+  }
+  console.log(`V aplikaciji: verzija s poljem navodilo: "${ime}" (web/src/lib/verzije.ts) pokaže ikono videa v oknu "i".`);
+}
+
 // ---------- Glavni potek ----------
 const browser = await chromium.launch({ args: ["--lang=sl-SI"] }); // datumska polja v slovenski obliki
 try {
-  if (SAMO_PDF) {
+  if (OBJAVI) {
+    await zagotoviPrijavo(browser);
+    await objavi(supabase());
+  } else if (SAMO_PDF) {
     const slike = JSON.parse(readFileSync(join(IZHOD, "slike.json"), "utf8"));
     console.log(`PDF: ${await narediPdf(browser, slike)}`);
   } else {

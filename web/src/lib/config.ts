@@ -7,3 +7,6 @@ export const SLIKE_MAPA = (process.env.NEXT_PUBLIC_SLIKE_MAPA ?? "").replace(/^\
 
 // Prijava je dovoljena samo s službenim e-mailom
 export const DOVOLJENA_DOMENA = "fines.si";
+
+// Supabase Storage bucket z video in PDF navodili (rbo-navodila/<ime>/video.mp4, navodilo.pdf)
+export const NAVODILA_BUCKET = "rbo-navodila";
