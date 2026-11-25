@@ -1,0 +1,14 @@
+{
+  "name": "rbo-navodila",
+  "private": true,
+  "description": "Generator navodil za uporabnike (video MP4 + PDF) - ni del aplikacije, ne gre na Vercel.",
+  "type": "module",
+  "scripts": {
+    "navodila": "node generator.mjs"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.119.2",
+    "ffmpeg-static": "^5.3.0",
+    "playwright": "^1.65.1"
+  }
+}
