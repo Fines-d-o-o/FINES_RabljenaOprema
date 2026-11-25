@@ -3,6 +3,17 @@
 // navodilo = ime video / PDF navodila v bucketu rbo-navodila (navodila/opisi/<ime>.mjs); v oknu "i" ikona videa.
 export const VERZIJE: { verzija: string; datum: string; spremembe: string[]; navodilo?: string }[] = [
   {
+    verzija: "11.01",
+    datum: "2026-11-25",
+    navodilo: "ai-iskanje",
+    spremembe: [
+      "AI iskanje: oznaka opreme se prepozna tudi, če je v nazivu napisana z malimi črkami (npr. »FBM« zdaj najde »Fbm-40S CL BM«).",
+      "AI iskanje razume želje v vprašanju: »poceni« / »dražje« / »pod 5000 €« (razvrsti po ceni), »malo rabljena« / »kot nova« (stanje), »novejša« / »od 2018« (leto proizvodnje), »nova oprema« / »zadnje dodano« / »ta mesec« / »najdlje na zalogi« (datum prejema), »z garancijo«, »na voljo«, »posojeno«, »brez cene« / »brez slike«. Pod poljem pokaže, kaj je upoštevalo, in koliko opreme nima vpisanega podatka.",
+      "AI iskanje: »napa« ali »etažna peč« vrne samo to opremo (ujemanje skupine in naziva), ne več podobne opreme za zapolnitev; AI model se naloži samo za opisna vprašanja (npr. »nekaj za pekarno«), zato je večina iskanj takojšnjih. Primeri za klik pod poljem, »Prikaži vse«.",
+      "Ikona video navodila v oknu »i« je oranžna, da je vidno, da se jo da klikniti.",
+    ],
+  },
+  {
     verzija: "10.01",
     datum: "2026-11-25",
     spremembe: [
@@ -173,4 +184,5 @@ export const TRENUTNA_VERZIJA = VERZIJE[0].verzija;
 // Naslovi video / PDF navodil (ključ = polje navodilo pri verziji)
 export const NASLOVI_NAVODIL: Record<string, string> = {
   "posoja-rezervacija": "Rezervacija in posoja opreme",
+  "ai-iskanje": "AI iskanje opreme",
 };

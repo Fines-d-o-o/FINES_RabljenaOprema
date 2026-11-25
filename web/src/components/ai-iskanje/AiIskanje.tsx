@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { ImageOff, Search, Sparkles, X } from "lucide-react";
+import { ChevronDown, ChevronUp, ImageOff, Search, Sparkles, X } from "lucide-react";
 import { Button, ErrorText, Score, StatusBadge } from "@/components/ui";
+import { prikazDatuma } from "@/lib/datum";
 import { createClient } from "@/lib/supabase/client";
 import type { OpremaSSliko } from "@/lib/types";
 import { imaOznake, jeStetje, oznakeVprasanja, razsiriVprasanje } from "./iskanje";
+import { brezPodatka, razberiNamere, razvrstiPoNameri, tockePredmeta, type Kljuc } from "./namere";
 import { besediloOpreme, naloziModel, vektorji } from "./model";
 
 // AI iskanje (poskusno). Odstranitev: glej README.md v tej mapi.
@@ -14,6 +16,11 @@ import { besediloOpreme, naloziModel, vektorji } from "./model";
 const PRODANO = "3. PRODANO";
 const PAKET = 8; // koliko opreme naenkrat pretvori v vektorje (manjši paketi = odzivnejša stran)
 const ST_ZADETKOV = 8;
+// Brez ujemanja skupine / naziva: prikaži samo zadetke, ki so blizu najboljšemu (model sicer vedno vrne vse)
+const RAZLIKA_PODOBNOSTI = 0.035;
+const IMENA_KLJUCEV = { cena: "vpisane cene", ocena: "vpisane ocene", leto: "vpisanega leta proizvodnje", prejem: "vpisanega datuma prejema" } as const;
+// Primeri pod iskalnim poljem (klik poišče)
+const PRIMERI = ["poceni peč", "malo rabljena etažna peč", "nova oprema", "napa pod 3000 €", "najdlje na zalogi", "koliko je posojenih", "brez cene"];
 
 const postavk = (n: number) => {
   const r = n % 100;
@@ -27,68 +34,117 @@ export function AiIskanje({ oprema }: { oprema: OpremaSSliko[] }) {
   const [stanje, setStanje] = useState<string | null>(null); // besedilo med delom (nalaganje, priprava, iskanje)
   const [napaka, setNapaka] = useState<string | null>(null);
   const [zadetki, setZadetki] = useState<OpremaSSliko[] | null>(null);
+  const [upostevano, setUpostevano] = useState<string[]>([]);
+  const [vse, setVse] = useState(false);
+  const [prikazi, setPrikazi] = useState<Kljuc | null>(null); // podatek, po katerem je razvrščeno (prikazan na zadetku)
   const [povzetek, setPovzetek] = useState<string | null>(null);
 
-  async function isci(e: FormEvent) {
+  function isci(e: FormEvent) {
     e.preventDefault();
-    const besedilo = vprasanje.trim();
+    void poisci(vprasanje);
+  }
+
+  /** Model pretvori opremo v vektorje (novo / spremenjeno se shrani v bazo) in vrne opremo po podobnosti. */
+  async function poPodobnosti(predmet: string, naVoljo: OpremaSSliko[]) {
+    setStanje("Nalagam AI model ...");
+    await naloziModel((p) => setStanje(`Nalagam AI model (samo prvič, ~120 MB): ${p} %`));
+    const supabase = createClient();
+    const { data: shranjeni, error } = await supabase.from("rbo_ai_vektor").select("id_oprema, besedilo");
+    if (error) throw new Error(error.message);
+    const obstojeci = new Map((shranjeni ?? []).map((r): [number, string] => [r.id_oprema, r.besedilo]));
+    const zaPripravo = oprema.filter((o) => obstojeci.get(o.id_oprema) !== besediloOpreme(o));
+    for (let i = 0; i < zaPripravo.length; i += PAKET) {
+      setStanje(`Pripravljam opremo za iskanje: ${i} / ${zaPripravo.length}`);
+      const paket = zaPripravo.slice(i, i + PAKET);
+      const v = await vektorji(paket.map((o) => `passage: ${besediloOpreme(o)}`));
+      const { error: napakaZapisa } = await supabase.from("rbo_ai_vektor").upsert(
+        paket.map((o, j) => ({ id_oprema: o.id_oprema, besedilo: besediloOpreme(o), vektor: v[j], posodobljeno: new Date().toISOString() })),
+        { onConflict: "id_oprema" },
+      );
+      if (napakaZapisa) throw new Error(napakaZapisa.message);
+    }
+    setStanje("Iščem ...");
+    const [poizvedba] = await vektorji([`query: ${razsiriVprasanje(predmet)}`]);
+    const { data, error: napakaIskanja } = await supabase.rpc("rbo_ai_isci", { poizvedba, stevilo: oprema.length });
+    if (napakaIskanja) throw new Error(napakaIskanja.message);
+    const poId = new Map(naVoljo.map((o) => [o.id_oprema, o]));
+    return ((data ?? []) as { id_oprema: number; podobnost: number }[])
+      .map((r) => ({ o: poId.get(r.id_oprema)!, p: r.podobnost }))
+      .filter((r) => !!r.o);
+  }
+
+  async function poisci(vnos: string) {
+    const besedilo = vnos.trim();
     if (!besedilo || stanje) return;
+    setVprasanje(besedilo);
     setNapaka(null);
     setZadetki(null);
     try {
-      setStanje("Nalagam AI model ...");
-      await naloziModel((p) => setStanje(`Nalagam AI model (samo prvič, ~120 MB): ${p} %`));
-
-      // Vektorji za novo ali spremenjeno opremo (izračuna jih brskalnik, shranijo se v bazo)
-      const supabase = createClient();
-      const { data: shranjeni, error } = await supabase.from("rbo_ai_vektor").select("id_oprema, besedilo");
-      if (error) throw new Error(error.message);
-      const obstojeci = new Map((shranjeni ?? []).map((r): [number, string] => [r.id_oprema, r.besedilo]));
-      const zaPripravo = oprema.filter((o) => obstojeci.get(o.id_oprema) !== besediloOpreme(o));
-      for (let i = 0; i < zaPripravo.length; i += PAKET) {
-        setStanje(`Pripravljam opremo za iskanje: ${i} / ${zaPripravo.length}`);
-        const paket = zaPripravo.slice(i, i + PAKET);
-        const v = await vektorji(paket.map((o) => `passage: ${besediloOpreme(o)}`));
-        const { error: napakaZapisa } = await supabase.from("rbo_ai_vektor").upsert(
-          paket.map((o, j) => ({
-            id_oprema: o.id_oprema,
-            besedilo: besediloOpreme(o),
-            vektor: v[j],
-            posodobljeno: new Date().toISOString(),
-          })),
-          { onConflict: "id_oprema" },
-        );
-        if (napakaZapisa) throw new Error(napakaZapisa.message);
-      }
-
-      setStanje("Iščem ...");
-      const [poizvedba] = await vektorji([`query: ${razsiriVprasanje(besedilo)}`]);
-      const { data, error: napakaIskanja } = await supabase.rpc("rbo_ai_isci", { poizvedba, stevilo: oprema.length });
-      if (napakaIskanja) throw new Error(napakaIskanja.message);
-      const poId = new Map(oprema.map((o) => [o.id_oprema, o]));
-      const razvrscena = ((data ?? []) as { id_oprema: number }[])
-        .map((r) => poId.get(r.id_oprema))
-        .filter((o): o is OpremaSSliko => !!o && o.status_prodaje !== PRODANO);
-
-      // Oznake iz vprašanja (FB, FD64 ...) omejijo zadetke, model jih samo razvrsti
+      // 1) Namere (cena, stanje, leto, datum prejema, status ...) in predmet iskanja
+      const namera = razberiNamere(besedilo);
+      const naVoljo = oprema.filter((o) => o.status_prodaje !== PRODANO);
       const oznake = oznakeVprasanja(besedilo, oprema);
+      const tocke = new Map(naVoljo.map((o) => [o.id_oprema, namera.predmet ? tockePredmeta(o, namera.predmet) : 0]));
+      const najvec = Math.max(0, ...tocke.values());
+
+      // 2) Kaj iščemo: oznaka (FBM) > besede v skupini / nazivu (napa, etažna peč) > AI model (opis) > vse.
+      //    AI model se naloži samo, ko je treba razumeti opis (npr. »nekaj za pekarno«).
+      const upost: string[] = [];
+      let kandidati: OpremaSSliko[];
       if (oznake.length > 0) {
-        const najdeno = razvrscena.filter((o) => imaOznake(o, oznake));
-        const kolicina = najdeno.reduce((v, o) => v + (o.kolicina ?? 0), 0);
-        setPovzetek(
-          `Oprema z oznako ${oznake.map((z) => z.toUpperCase()).join(" + ")}: ${postavk(najdeno.length)}` +
-            (kolicina !== najdeno.length ? `, skupna količina ${kolicina}` : "") +
-            " (brez prodane opreme).",
+        kandidati = naVoljo.filter((o) => imaOznake(o, oznake));
+        upost.push(`oznaka ${oznake.map((z) => z.toUpperCase()).join(" + ")}`);
+      } else if (najvec > 0) {
+        kandidati = naVoljo.filter((o) => tocke.get(o.id_oprema) === najvec);
+        const skupine = [...new Set(kandidati.map((o) => o.skupina_opreme).filter(Boolean))];
+        upost.push(
+          skupine.length === 0
+            ? `naziv: ${kandidati.length === 1 ? kandidati[0].oprema_naziv : postavk(kandidati.length)}`
+            : `skupina: ${skupine.slice(0, 3).join(", ")}${skupine.length > 3 ? ` in še ${skupine.length - 3}` : ""}`,
         );
-        setZadetki(najdeno);
+      } else if (namera.predmet) {
+        const podobni = await poPodobnosti(namera.predmet, naVoljo);
+        const najboljsa = podobni[0]?.p ?? 0;
+        // brez filtrov in razvrščanja samo najbližji; z njimi širši nabor, ki ga filtri nato zožijo
+        const meja = namera.filtri.length > 0 || namera.razvrscanje ? RAZLIKA_PODOBNOSTI * 2 : RAZLIKA_PODOBNOSTI;
+        kandidati = podobni.filter((r) => r.p >= najboljsa - meja).map((r) => r.o);
+        upost.push(`AI: podobno »${namera.predmet}«`);
       } else {
-        setPovzetek(
-          jeStetje(besedilo)
-            ? "Za štetje napiši oznako opreme (npr. »koliko je FB peči«). Spodaj je najbolj podobna oprema:"
-            : "Najbolj ustreza opisu (od najboljšega zadetka naprej):",
-        );
-        setZadetki(razvrscena.slice(0, ST_ZADETKOV));
+        kandidati = naVoljo;
+        upost.push("vsa oprema (brez prodane)");
       }
+
+      // 3) Filtri (cena do, ocena vsaj, letnik, prejeto ...) - oprema brez vpisanega podatka ne ustreza; to povemo
+      const opombe: string[] = [];
+      for (const f of namera.filtri) {
+        const pred = kandidati;
+        kandidati = kandidati.filter(f.ustreza);
+        upost.push(f.opis);
+        if (f.vrednost) {
+          const brez = brezPodatka(pred, f.vrednost);
+          if (brez > 0) opombe.push(`${postavk(brez)} brez ${IMENA_KLJUCEV[f.vrednost]} ni upoštevanih`);
+        }
+      }
+      // 4) Razvrščanje (poceni, malo rabljeno, nova oprema ...) - brez podatka na konec
+      if (namera.razvrscanje) {
+        kandidati = razvrstiPoNameri(kandidati, namera.razvrscanje);
+        upost.push(`razvrščeno ${namera.razvrscanje.opis}`);
+        const brez = brezPodatka(kandidati, namera.razvrscanje.po);
+        if (brez > 0) opombe.push(`${postavk(brez)} brez ${IMENA_KLJUCEV[namera.razvrscanje.po]} je na koncu`);
+      }
+
+      const kolicina = kandidati.reduce((v, o) => v + (o.kolicina ?? 0), 0);
+      setPovzetek(
+        (jeStetje(besedilo)
+          ? `Odgovor: ${postavk(kandidati.length)}` + (kolicina !== kandidati.length ? `, skupna količina ${kolicina}` : "")
+          : `Najdeno: ${postavk(kandidati.length)}`) +
+          " (brez prodane opreme)" +
+          (opombe.length ? `. ${opombe.join("; ")}.` : "."),
+      );
+      setUpostevano(upost);
+      setPrikazi(namera.razvrscanje?.po ?? null);
+      setVse(false);
+      setZadetki(kandidati);
     } catch (err) {
       setNapaka(`AI iskanje ni uspelo: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -133,12 +189,39 @@ export function AiIskanje({ oprema }: { oprema: OpremaSSliko[] }) {
         )}
       </form>
 
+      {!zadetki && !stanje && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-semibold text-ink-500">Primeri:</span>
+          {PRIMERI.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => void poisci(p)}
+              title={`Poišči: ${p}`}
+              className="rounded-full border border-ink-200 bg-white px-2.5 py-0.5 text-xs font-medium text-ink-700 hover:border-fines-500 hover:text-fines-600"
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
       {stanje && (
         <p role="status" className="text-sm font-medium text-sync-600">
           {stanje}
         </p>
       )}
       {napaka && <ErrorText>{napaka}</ErrorText>}
+
+      {zadetki && upostevano.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5" title="Kako je AI iskanje razumelo vprašanje">
+          <span className="text-xs font-semibold text-ink-500">Upoštevano:</span>
+          {upostevano.map((u) => (
+            <span key={u} className="rounded-full border border-fines-200 bg-fines-50 px-2 py-0.5 text-xs font-semibold text-fines-700">
+              {u}
+            </span>
+          ))}
+        </div>
+      )}
 
       {zadetki &&
         (zadetki.length === 0 ? (
@@ -147,19 +230,31 @@ export function AiIskanje({ oprema }: { oprema: OpremaSSliko[] }) {
           <>
             <p className="text-sm font-medium text-ink-700">{povzetek}</p>
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-              {zadetki.map((o) => (
+              {(vse ? zadetki : zadetki.slice(0, ST_ZADETKOV)).map((o) => (
                 <li key={o.id_oprema}>
-                  <Zadetek o={o} />
+                  <Zadetek o={o} prikazi={prikazi} />
                 </li>
               ))}
             </ul>
+            {zadetki.length > ST_ZADETKOV && (
+              <div>
+                <Button
+                  variant="neutral"
+                  icon={vse ? ChevronUp : ChevronDown}
+                  onClick={() => setVse((v) => !v)}
+                  hint={vse ? "Prikaži samo najboljše zadetke" : "Prikaži vse najdene zadetke"}
+                >
+                  {vse ? "Prikaži manj" : `Prikaži vse (${zadetki.length})`}
+                </Button>
+              </div>
+            )}
           </>
         ))}
     </section>
   );
 }
 
-function Zadetek({ o }: { o: OpremaSSliko }) {
+function Zadetek({ o, prikazi }: { o: OpremaSSliko; prikazi: Kljuc | null }) {
   return (
     <Link
       href={`/oprema/${o.id_oprema}`}
@@ -185,7 +280,15 @@ function Zadetek({ o }: { o: OpremaSSliko }) {
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
           {o.prodajna_cena != null && <span className="font-bold tabular-nums text-fines-600">{evri(o.prodajna_cena)}</span>}
           <Score value={o.ocena} />
+          {o.leto_proizvodnje != null && (
+            <span className={`tabular-nums ${prikazi === "leto" ? "font-bold text-ink-900" : "text-ink-500"}`} title="Leto proizvodnje">
+              {o.leto_proizvodnje}
+            </span>
+          )}
         </span>
+        {prikazi === "prejem" && o.datum_prejema && (
+          <span className="text-xs text-ink-500">Prejeto {prikazDatuma(o.datum_prejema)}</span>
+        )}
       </span>
     </Link>
   );

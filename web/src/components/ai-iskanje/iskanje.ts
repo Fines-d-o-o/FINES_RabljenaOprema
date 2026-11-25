@@ -19,11 +19,22 @@ const jeOznaka = (beseda: string) => /\p{N}/u.test(beseda) || /^\p{Lu}{2,5}$/u.t
 const ustreza = (beseda: string, oznaka: string) =>
   beseda === oznaka || (beseda.startsWith(oznaka) && /\p{N}/u.test(beseda[oznaka.length]));
 
+// Kratice, ki so vsaj pri eni opremi napisane z velikimi črkami (FBM) - tako je oznaka tudi »Fbm-40S«
+let kratice = new Set<string>();
+const nastaviKratice = (oprema: OpremaVrstica[]) => {
+  kratice = new Set(
+    oprema.flatMap((o) => [...besede(o.oprema_naziv), ...besede(o.koda)].filter(jeOznaka).map(normaliziraj)),
+  );
+};
+
 const oznakeOpreme = (o: OpremaVrstica) =>
-  [...besede(o.oprema_naziv), ...besede(o.koda)].filter(jeOznaka).map(normaliziraj);
+  [...besede(o.oprema_naziv), ...besede(o.koda)]
+    .filter((b) => jeOznaka(b) || kratice.has(normaliziraj(b)))
+    .map(normaliziraj);
 
 /** Besede vprašanja, ki so oznake obstoječe opreme (npr. »fb« iz »koliko je FB peči«). */
 export function oznakeVprasanja(vprasanje: string, oprema: OpremaVrstica[]): string[] {
+  nastaviKratice(oprema);
   const vse = new Set(oprema.flatMap(oznakeOpreme));
   return [
     ...new Set(

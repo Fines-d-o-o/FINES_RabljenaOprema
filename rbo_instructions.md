@@ -45,4 +45,4 @@ Ni za prodajo rdeča, Ni urejeno za prodajo rumena, Neprodano oranžna, Prodano 
 - Sken serijske nalepke (OCR v brskalniku): `web/src/components/sken-nalepke/`.
 
 ## Navodila za uporabnike (po standardu)
-- Opisi v `navodila/opisi/` (zdaj: `posoja-rezervacija` za 8.01 / 8.02), generator `navodila/generator.mjs`. Testna oprema "FBM 40 - primer" se doda v bazo in po posnetku skrije.
+- Opisi v `navodila/opisi/` (zdaj: `posoja-rezervacija` za 8.01 / 8.02, `ai-iskanje` za 11.01 - brez testne opreme), generator `navodila/generator.mjs`. Testna oprema "FBM 40 - primer" se doda v bazo in po posnetku skrije.

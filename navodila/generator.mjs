@@ -334,6 +334,7 @@ async function izvedi(sn, d, cilj, ctx) {
   await klikVal(sn);
   if (d.tipkaj) {
     await loc.click();
+    if (d.pocisti) await loc.fill(""); // { tipkaj, besedilo, pocisti: true } = najprej izprazni polje
     const besedilo = d.besedilo.replace("{naziv}", ctx.naziv);
     for (const znak of besedilo) {
       await loc.pressSequentially(znak);
@@ -352,17 +353,41 @@ async function izvedi(sn, d, cilj, ctx) {
 }
 
 /** Slika za PDF: brez podnapisa, kazalca in obrobe; stran se po sliki vrne na isti položaj (ne gre v video). */
-async function slikaZaPdf(sn, obmocje, pot) {
+/**
+ * Slika za PDF: brez podnapisa, kazalca in obrobe; ne gre v video (stran se nato vrne na isti položaj in širino).
+ * slika.obmocje vrne lokator ali seznam lokatorjev (izrez = skupni okvir obstoječih);
+ * slika.sirina = širina strani za sliko (npr. 820: zadetki v dveh stolpcih, večja pisava v PDF).
+ */
+async function slikaZaPdf(sn, slika, pot) {
   const p = sn.p;
-  const loc = obmocje(p);
   const y0 = await p.evaluate(() => scrollY);
+  if (slika.sirina) {
+    await p.setViewportSize({ width: slika.sirina, height: H });
+    await cakaj(400);
+  }
+  const sirina = slika.sirina ?? W;
   await p.evaluate(NARISI, { ...sn.S, podnapis: null, kazalec: null, obroba: null, val: null, prehod: null, naslovnica: null });
-  await loc.evaluate((e) => e.scrollIntoView({ block: "center", behavior: "instant" }));
-  const r = await loc.boundingBox();
+  const vsi = [slika.obmocje(p)].flat();
+  const lokatorji = [];
+  for (const l of vsi) if ((await l.count()) > 0) lokatorji.push(l.first());
+  // visoko območje (npr. seznam zadetkov) od vrha, sicer na sredino
+  const okvir = async () => {
+    const bb = (await Promise.all(lokatorji.map((l) => l.boundingBox()))).filter(Boolean);
+    const x = Math.min(...bb.map((b) => b.x));
+    const y = Math.min(...bb.map((b) => b.y));
+    return { x, y, width: Math.max(...bb.map((b) => b.x + b.width)) - x, height: Math.max(...bb.map((b) => b.y + b.height)) - y };
+  };
+  const visina = (await okvir()).height;
+  await lokatorji[0].evaluate((e, blok) => e.scrollIntoView({ block: blok, behavior: "instant" }), visina > H * 0.85 ? "start" : "center");
+  const r = await okvir();
   const x = Math.max(0, r.x - 3);
   const y = Math.max(0, r.y - 3);
-  const clip = { x, y, width: Math.min(W, r.x + r.width + 3) - x, height: Math.min(H, r.y + r.height + 3) - y };
+  const clip = { x, y, width: Math.min(sirina, r.x + r.width + 3) - x, height: Math.min(H, r.y + r.height + 3) - y };
   await p.screenshot({ path: pot, clip, scale: "device" });
+  if (slika.sirina) {
+    await p.setViewportSize({ width: W, height: H });
+    await cakaj(400);
+  }
   await p.evaluate((y) => window.scrollTo(0, y), y0);
 }
 
@@ -509,16 +534,17 @@ async function posnemi() {
   mkdirSync(SLIKE, { recursive: true });
   await zagotoviPrijavo(browser);
   const sb = supabase();
+  // spec.testnaOprema === false: navodilo samo bere (npr. iskanje) - v bazo se nič ne zapiše
   const naziv = "FBM 40 - primer";
-  const id = await dodajTestnoOpremo(sb, naziv);
+  const id = spec.testnaOprema === false ? null : await dodajTestnoOpremo(sb, naziv);
   const ctx = { id, naziv };
-  console.log(`Testna oprema ${id}: ${naziv}`);
+  if (id) console.log(`Testna oprema ${id}: ${naziv}`);
   const slike = {};
   try {
     const bctx = await browser.newContext({ storageState: PRIJAVA, viewport: { width: W, height: H }, deviceScaleFactor: DSF, locale: "sl-SI" });
     const p = await bctx.newPage();
     p.on("dialog", (d) => d.accept());
-    await p.goto(`${URL_APP}/oprema/${id}`);
+    await p.goto(`${URL_APP}${spec.zacetek ? spec.zacetek(ctx) : `/oprema/${id}`}`);
     await p.waitForLoadState("networkidle");
 
     const sn = new Snemalnik(p, join(IZHOD, "video.mp4"));
@@ -560,16 +586,16 @@ async function posnemi() {
 
         if (k.slika?.pred) {
           slike[`${fi}-${ki}`] = join(SLIKE, `${fi + 1}-${st}.png`);
-          await slikaZaPdf(sn, k.slika.obmocje, slike[`${fi}-${ki}`]);
+          await slikaZaPdf(sn, k.slika, slike[`${fi}-${ki}`]);
         }
         for (const d of k.dejanja ?? []) await izvedi(sn, d, cilj, ctx);
         if (S.obroba) await sn.animiraj(6, (t) => (S.obroba.a = 1 - t));
         S.obroba = null;
-        await sn.drzi(900);
+        await sn.drzi(k.drziPo ?? 900); // drziPo = čas za ogled rezultata (npr. zadetkov iskanja)
 
         if (k.slika && !k.slika.pred) {
           slike[`${fi}-${ki}`] = join(SLIKE, `${fi + 1}-${st}.png`);
-          await slikaZaPdf(sn, k.slika.obmocje, slike[`${fi}-${ki}`]);
+          await slikaZaPdf(sn, k.slika, slike[`${fi}-${ki}`]);
         }
       }
     }
@@ -586,6 +612,6 @@ async function posnemi() {
     console.log(`PDF: ${await narediPdf(browser, slike)}`);
     console.log(`\nGotovo: ${IZHOD}\n  video.mp4\n  navodilo.pdf`);
   } finally {
-    await skrijTestnoOpremo(sb, id);
+    if (id) await skrijTestnoOpremo(sb, id);
   }
 }
